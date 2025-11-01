@@ -1,5 +1,10 @@
 #pragma once
 #include <cmath>
+#include <afxwin.h>
+//调用dx2d库
+#include <d2d1.h>
+#include <d2d1helper.h>
+#pragma comment(lib, "d2d1.lib")
 class CShap
 {
 public:
@@ -9,6 +14,9 @@ public:
 	virtual bool IsSelected(CPoint point) = 0;
 	virtual void ChangeSelected(CPoint point);
 	virtual void DrawSelection(CPaintDC* pdc) = 0;
+	virtual void Move(CSize delta) = 0;
+	virtual void Rotate(double degrees) = 0;
+	virtual CPoint GetCenter() const = 0;
 	virtual void Destroy();
 	CShap() = default;
 };
@@ -28,6 +36,16 @@ public:
 
 	void DrawSelection(CPaintDC* pdc) override;
 
+
+	// 通过 CShap 继承
+	void Move(CSize delta) override;
+
+
+	// 通过 CShap 继承
+	void Rotate(double degrees) override;
+
+	CPoint GetCenter() const override;
+
 };
 
 class CircleShap :public CShap {
@@ -43,5 +61,11 @@ public:
 	void Draw(CPaintDC* pdc) override;
 	bool IsSelected(CPoint point) override;
 	void DrawSelection(CPaintDC* pdc) override;
-};
 
+	// 通过 CShap 继承
+	void Move(CSize delta) override;
+
+	// 通过 CShap 继承
+	void Rotate(double degrees) override;
+	CPoint GetCenter() const override;
+};

@@ -1,6 +1,18 @@
 #include "pch.h"
 #include "CShap.h"
 
+
+static CPoint RotatePointAround(const CPoint& pt, const CPoint& center, double rad)
+{
+	double dx = static_cast<double>(pt.x - center.x);
+	double dy = static_cast<double>(pt.y - center.y);
+	double cosv = std::cos(rad);
+	double sinv = std::sin(rad);
+	double rx = dx * cosv - dy * sinv;
+	double ry = dx * sinv + dy * cosv;
+	return CPoint(static_cast<int>(std::round(center.x + rx)), static_cast<int>(std::round(center.y + ry)));
+}
+
 LineShap::LineShap(CPoint start, CPoint end)
 {
 	startPoint = start;
@@ -61,6 +73,26 @@ void LineShap::DrawSelection(CPaintDC* pdc)
 	this->Draw(pdc);
 }
 
+void LineShap::Move(CSize delta)
+{
+	startPoint.Offset(delta);
+	endPoint.Offset(delta);
+}
+
+void LineShap::Rotate(double degrees)
+{
+	double rad = degrees * (acos(-1.0) / 180.0);
+	CPoint center = GetCenter();
+	startPoint = RotatePointAround(startPoint, center, rad);
+	endPoint = RotatePointAround(endPoint, center, rad);
+}
+
+CPoint LineShap::GetCenter() const
+{
+	return CPoint((startPoint.x + endPoint.x) / 2, (startPoint.y + endPoint.y) / 2);
+
+}
+
 CircleShap::CircleShap(CPoint center, CPoint r)
 {
 	centerPoint = center;
@@ -110,6 +142,23 @@ void CircleShap::DrawSelection(CPaintDC* pdc)
 	pdc->Ellipse(centerPoint.x - r, centerPoint.y - r, centerPoint.x + r + 1, centerPoint.y + r + 1);
 
 	pdc->SelectObject(pOldPen);
+}
+
+void CircleShap::Move(CSize delta)
+{
+	centerPoint.Offset(delta);
+	rPoint.Offset(delta);
+}
+
+void CircleShap::Rotate(double degrees)
+{
+	double rad = degrees * (acos(-1.0) / 180.0);
+	rPoint = RotatePointAround(rPoint, centerPoint, rad);
+}
+
+CPoint CircleShap::GetCenter() const
+{
+	return centerPoint;
 }
 
 
