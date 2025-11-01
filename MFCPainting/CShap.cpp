@@ -93,18 +93,42 @@ CPoint LineShap::GetCenter() const
 
 }
 
+void LineShap::Scale(double factor, CPoint center)
+{
+	auto scalePoint = [&](CPoint& pt) {
+		double dx = static_cast<double>(pt.x - center.x);
+		double dy = static_cast<double>(pt.y - center.y);
+		pt.x = center.x + static_cast<int>(std::round(dx * factor));
+		pt.y = center.y + static_cast<int>(std::round(dy * factor));
+		};
+	scalePoint(startPoint);
+	scalePoint(endPoint);
+}
+
 CircleShap::CircleShap(CPoint center, CPoint r)
 {
 	centerPoint = center;
 	rPoint = r;
+
+	centerX = static_cast<double>(center.x);
+	centerY = static_cast<double>(center.y);
+	rdx = static_cast<double>(r.x - center.x);
+	rdy = static_cast<double>(r.y - center.y);
 }
 
 void CircleShap::Draw(CPaintDC* pdc)
 {
+	// 以高精度计算半径并在绘制时四舍五入为像素
+	double radius_d = std::sqrt(rdx * rdx + rdy * rdy);
+	int r = static_cast<int>(std::round(radius_d));
+
+	// 更新整数副本（兼容旧代码）
+	centerPoint.x = static_cast<int>(std::round(centerX));
+	centerPoint.y = static_cast<int>(std::round(centerY));
+	rPoint.x = centerPoint.x + static_cast<int>(std::round(rdx));
+	rPoint.y = centerPoint.y + static_cast<int>(std::round(rdy));
+
 	CBrush* pOld = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
-	double dx = static_cast<double>(rPoint.x - centerPoint.x);
-	double dy = static_cast<double>(rPoint.y - centerPoint.y);
-	int r = static_cast<int>(std::sqrt(dx * dx + dy * dy) + 0.5); // 半径
 	pdc->Ellipse(centerPoint.x - r, centerPoint.y - r, centerPoint.x + r + 1, centerPoint.y + r + 1);
 	pdc->SelectObject(pOld);
 }
@@ -146,8 +170,10 @@ void CircleShap::DrawSelection(CPaintDC* pdc)
 
 void CircleShap::Move(CSize delta)
 {
-	centerPoint.Offset(delta);
-	rPoint.Offset(delta);
+	centerX += delta.cx;
+	centerY += delta.cy;
+	centerPoint.x = static_cast<int>(std::round(centerX));
+	centerPoint.y = static_cast<int>(std::round(centerY));
 }
 
 void CircleShap::Rotate(double degrees)
@@ -159,6 +185,26 @@ void CircleShap::Rotate(double degrees)
 CPoint CircleShap::GetCenter() const
 {
 	return centerPoint;
+}
+
+void CircleShap::Scale(double factor, CPoint center)
+{// 以传入的 center (整数) 为缩放中心，按 double 进行计算
+	double cx = static_cast<double>(center.x);
+	double cy = static_cast<double>(center.y);
+
+	// 缩放圆心位置相对于缩放中心
+	centerX = cx + (centerX - cx) * factor;
+	centerY = cy + (centerY - cy) * factor;
+
+	// 缩放半径向量
+	rdx *= factor;
+	rdy *= factor;
+
+	// 同步整数副本
+	centerPoint.x = static_cast<int>(std::round(centerX));
+	centerPoint.y = static_cast<int>(std::round(centerY));
+	rPoint.x = centerPoint.x + static_cast<int>(std::round(rdx));
+	rPoint.y = centerPoint.y + static_cast<int>(std::round(rdy));
 }
 
 

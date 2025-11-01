@@ -38,6 +38,7 @@ ON_WM_CREATE()
 ON_WM_LBUTTONUP()
 ON_WM_RBUTTONUP()
 ON_WM_RBUTTONDOWN()
+ON_WM_MOUSEWHEEL()
 END_MESSAGE_MAP()
 
 
@@ -67,7 +68,7 @@ void CChildView::OnPaint()
 			ln->Draw(&dc);
 		}
 
-	if (IsSelected) {
+	if (StateCheck()) {
 			for (const auto& shp : Shaps)
 			{
 				shp->ChangeSelected(points[0]);
@@ -76,9 +77,14 @@ void CChildView::OnPaint()
 				}
 			}
 		}
-	else {
+	else if(!IsSelected){
 		DrawDot(dc);
 	}
+}
+
+bool CChildView::StateCheck()
+{
+	return IsSelected && !IsSelectedSave;
 }
 
 void CChildView::DrawDot(CPaintDC& dc)
@@ -103,6 +109,9 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 	CWnd::OnLButtonDown(nFlags, point);
 
 	if (IsSelected) {
+		//缩放结束
+		IsSelectedSave = false;
+
 		points.clear();
 		points.push_back(point);
 
@@ -227,6 +236,7 @@ void CChildView::OnLineDraw()
 	points.clear();
 	IsDrawLine = true;
 	IsSelected = false;
+	IsSelectedSave = false;
 }
 
 BOOL CChildView::InitializeD2D()
@@ -307,6 +317,7 @@ void CChildView::OnCircle()
 	points.clear();
 	IsCircle = true;
 	IsSelected = false;
+	IsSelectedSave = false;
 }
 
 void CChildView::OnSelect()
@@ -394,6 +405,7 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
 
 	CWnd::OnRButtonDown(nFlags, point);
+
 	if (!IsSelected) return;
 
 	// 找当前被选中的图元优先，否则使用命中检测
@@ -415,4 +427,33 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 	m_lastRotateAngle = std::atan2(static_cast<double>(point.y - m_rotateCenter.y),
 		static_cast<double>(point.x - m_rotateCenter.x));
 	SetCapture();
+}
+
+BOOL CChildView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
+{
+	// 把屏幕坐标转换为客户区坐标（MFC 传入的 pt 是屏幕坐标）
+	ScreenToClient(&pt);
+
+	// 以每格滚轮缩放因子 1.1 为基准；正滚放大，负滚缩小
+	const double step = 1.1;
+	double factor = std::pow(step, static_cast<double>(zDelta) / 120.0); // zDelta 每 120 为一格
+
+	// 确定缩放目标：优先被选中图元
+	CShap* target = nullptr;
+	for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+		if (Shaps[i]->Selected)
+		{
+			target = Shaps[i]; break;
+		}
+	}
+
+	if (target) {
+		// 以图元自身中心缩放（也可以改为以鼠标位置缩放：传 pt）
+		IsSelectedSave = true;
+		CPoint center = target->GetCenter();
+		target->Scale(factor, center);
+		Invalidate();
+	}
+
+	return CWnd::OnMouseWheel(nFlags, zDelta, pt);
 }
