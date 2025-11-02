@@ -218,3 +218,157 @@ void CShap::Destroy()
 {
 	this->~CShap();
 }
+
+static inline double DegToRad(double deg) {
+	return deg * (acos(-1.0) / 180.0);
+}
+
+void RectShap::UpdateIntCorners()
+{
+	double fx[4], fy[4];
+	ComputeFloatCorners(fx, fy);
+	for (int i = 0; i < 4; ++i) {
+		cornersInt[i].x = static_cast<int>(std::round(fx[i]));
+		cornersInt[i].y = static_cast<int>(std::round(fy[i]));
+	}
+}
+
+
+void RectShap::ComputeFloatCorners(double outX[4], double outY[4])
+{
+	// 未旋转时顶点相对于中心的坐标（顺序：LT, RT, RB, LB）
+	double rx[4] = { -halfW, halfW, halfW, -halfW };
+	double ry[4] = { -halfH, -halfH, halfH, halfH };
+
+	double rad = DegToRad(angleDeg);
+	double cosv = std::cos(rad);
+	double sinv = std::sin(rad);
+
+	for (int i = 0; i < 4; ++i) {
+		double tx = rx[i] * cosv - ry[i] * sinv;
+		double ty = rx[i] * sinv + ry[i] * cosv;
+		outX[i] = centerX + tx;
+		outY[i] = centerY + ty;
+	}
+}
+
+RectShap::RectShap(CPoint topLeft, CPoint bottomRight)
+{
+	// 规范化输入：计算左上与右下
+	int left = min(topLeft.x, bottomRight.x);
+	int right = max(topLeft.x, bottomRight.x);
+	int top = min(topLeft.y, bottomRight.y);
+	int bottom = max(topLeft.y, bottomRight.y);
+
+	centerX = (left + right) / 2.0;
+	centerY = (top + bottom) / 2.0;
+	halfW = (right - left) / 2.0;
+	halfH = (bottom - top) / 2.0;
+	angleDeg = 0.0;
+
+	UpdateIntCorners();
+}
+
+void RectShap::Draw(CPaintDC* pdc)
+{
+	if (!pdc) return;
+
+	// 使用 NULL_BRUSH 只绘制轮廓
+	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
+	CPen pen(PS_SOLID, 1, RGB(0, 0, 0));
+	CPen* pOldPen = pdc->SelectObject(&pen);
+
+	// 绘制多边形（闭合）
+	pdc->MoveTo(cornersInt[0]);
+	for (int i = 1; i < 4; ++i) pdc->LineTo(cornersInt[i]);
+	pdc->LineTo(cornersInt[0]);
+
+	pdc->SelectObject(pOldPen);
+	pdc->SelectObject(pOldBrush);
+}
+
+bool RectShap::IsSelected(CPoint point)
+{
+	const double tolerance = 5.0;
+	double px = static_cast<double>(point.x);
+	double py = static_cast<double>(point.y);
+
+	// 浮点顶点
+	double vx[4], vy[4];
+	ComputeFloatCorners(vx, vy);
+
+	// 检查点到每条边的最短距离
+	for (int i = 0; i < 4; ++i) {
+		int j = (i + 1) % 4;
+		double ax = vx[i], ay = vy[i];
+		double bx = vx[j], by = vy[j];
+		double abx = bx - ax, aby = by - ay;
+		double apx = px - ax, apy = py - ay;
+		double ab2 = abx * abx + aby * aby;
+		double t = 0.0;
+		if (ab2 > 1e-9) t = (apx * abx + apy * aby) / ab2;
+		if (t < 0.0) t = 0.0;
+		if (t > 1.0) t = 1.0;
+		double cx = ax + t * abx;
+		double cy = ay + t * aby;
+		double dx = px - cx;
+		double dy = py - cy;
+		double dist = std::sqrt(dx * dx + dy * dy);
+		if (dist <= tolerance) return true;
+	}
+	return false;
+}
+
+void RectShap::DrawSelection(CPaintDC* pdc)
+{
+	if (!Selected || !pdc) return;
+
+	CPen dashPen(PS_DASH, 1, RGB(0, 0, 0));
+	CPen* pOldPen = pdc->SelectObject(&dashPen);
+	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
+
+	pdc->MoveTo(cornersInt[0]);
+	for (int i = 1; i < 4; ++i) pdc->LineTo(cornersInt[i]);
+	pdc->LineTo(cornersInt[0]);
+
+	pdc->SelectObject(pOldBrush);
+	pdc->SelectObject(pOldPen);
+}
+
+void RectShap::Move(CSize delta)
+{
+	centerX += delta.cx;
+	centerY += delta.cy;
+	UpdateIntCorners();
+}
+
+void RectShap::Rotate(double degrees)
+{
+	angleDeg += degrees;
+	// 规范化角度（可选）
+	if (angleDeg > 360.0 || angleDeg < -360.0) {
+		angleDeg = std::fmod(angleDeg, 360.0);
+	}
+	UpdateIntCorners();
+}
+
+CPoint RectShap::GetCenter() const
+{
+	return CPoint(static_cast<int>(std::round(centerX)), static_cast<int>(std::round(centerY)));
+}
+
+void RectShap::Scale(double factor, CPoint center)
+{
+	double cx = static_cast<double>(center.x);
+	double cy = static_cast<double>(center.y);
+
+	// 缩放中心位置
+	centerX = cx + (centerX - cx) * factor;
+	centerY = cy + (centerY - cy) * factor;
+
+	// 缩放尺寸
+	halfW *= factor;
+	halfH *= factor;
+
+	UpdateIntCorners();
+}

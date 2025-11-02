@@ -40,6 +40,7 @@ protected:
 public:
 	afx_msg void OnLineDraw();
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
+	void DrawRect(CPoint& point);
 	void CheckSelectedPoint(CPoint& point);
 	void DrawCircle(CPoint& point);
 	void DrawLine(CPoint& point);
@@ -69,6 +70,12 @@ private:
 #pragma region Circle
 	bool IsCircle = false;
 	int CircleNum = 2;
+#pragma endregion
+
+
+#pragma region Rect
+	bool IsRect = false;
+	int RectNum = 2;
 #pragma endregion
 
 #pragma region Select
@@ -116,5 +123,6 @@ public:
 	afx_msg void OnRButtonUp(UINT nFlags, CPoint point);
 	afx_msg void OnRButtonDown(UINT nFlags, CPoint point);
 	afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
+	afx_msg void OnRect();
 };
 

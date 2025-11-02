@@ -39,6 +39,7 @@ ON_WM_LBUTTONUP()
 ON_WM_RBUTTONUP()
 ON_WM_RBUTTONDOWN()
 ON_WM_MOUSEWHEEL()
+ON_COMMAND(ID_32773, &CChildView::OnRect)
 END_MESSAGE_MAP()
 
 
@@ -87,132 +88,7 @@ bool CChildView::StateCheck()
 	return IsSelected && !IsSelectedSave;
 }
 
-void CChildView::DrawDot(CPaintDC& dc)
-{
-	// 绘制已保存的点（实心小圆）
-	CBrush brush(RGB(0, 0, 0));
-	CBrush* pOldBrush = dc.SelectObject(&brush);
-	const int r = 3; // 半径
-	for (const auto& pt : points)
-	{
-		dc.Ellipse(pt.x - r, pt.y - r, pt.x + r + 1, pt.y + r + 1);
-	}
-	dc.SelectObject(pOldBrush);
-}
-
-
-//按下左键
-void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
-{
-	// TODO: 在此添加消息处理程序代码和/或调用默认值
-
-	CWnd::OnLButtonDown(nFlags, point);
-
-	if (IsSelected) {
-		//缩放结束
-		IsSelectedSave = false;
-
-		points.clear();
-		points.push_back(point);
-
-		bool found = false;
-		m_pDragged = nullptr;
-		for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
-			if (!found && Shaps[i]->IsSelected(point)) {
-				// 将该图元设为选中并开始拖拽
-				Shaps[i]->ChangeSelected(point);
-				m_pDragged = Shaps[i];
-				found = true;
-			}
-			else {
-				Shaps[i]->Selected = false;
-			}
-		}
-
-		if (m_pDragged) {
-			m_bDragging = true;
-			m_lastMouse = point;
-			SetCapture(); // 捕获鼠标，保证拖拽期间接收鼠标消息
-		}
-		Invalidate();
-		return; // 选择模式下不创建新图形
-	}
-	else
-	{
-		CheckSelectedPoint(point);
-		DrawLine(point);
-		DrawCircle(point);
-	}
-
-
-	Invalidate(); // 触发重绘
-}
-
-
-void CChildView::OnMouseMove(UINT nFlags, CPoint point)
-{
-	// TODO: 在此添加消息处理程序代码和/或调用默认值
-
-	CWnd::OnMouseMove(nFlags, point);
-	// 旋转优先处理
-	if (m_bRotating && m_pRotated) {
-		double curAngle = std::atan2(static_cast<double>(point.y - m_rotateCenter.y),
-			static_cast<double>(point.x - m_rotateCenter.x));
-		double deltaRad = curAngle - m_lastRotateAngle;
-		// 将弧度差转换为度
-		double deltaDeg = deltaRad * (180.0 / acos(-1.0));
-		if (std::abs(deltaDeg) > 1e-6) {
-			m_pRotated->Rotate(deltaDeg);
-			m_lastRotateAngle = curAngle;
-			Invalidate();
-		}
-		return;
-	}
-	if (m_bDragging && m_pDragged) {
-		// 计算偏移并移动选中图元
-		CSize delta(point.x - m_lastMouse.x, point.y - m_lastMouse.y);
-		if (delta.cx != 0 || delta.cy != 0) {
-			m_pDragged->Move(delta);
-			m_lastMouse = point;
-			Invalidate(); // 重绘以显示移动结果
-		}
-		return;
-	}
-	// 非拖拽状态下保持原有的悬停/光标逻辑
-	if (IsSelected) {
-		bool hit = false;
-		for (auto it = Shaps.rbegin(); it != Shaps.rend(); ++it) {
-			if ((*it)->IsSelected(point)) {
-				hit = true;
-				break;
-			}
-		}
-		::SetCursor(::LoadCursor(nullptr, hit ? IDC_HAND : IDC_ARROW));
-	}
-}
-
-void CChildView::CheckSelectedPoint(CPoint& point)
-{
-	if (IsSelected) {
-		points.clear();
-		points.push_back(point);
-	}
-}
-
-void CChildView::DrawCircle(CPoint& point)
-{
-	if (IsCircle && points.size() < CircleNum) {
-		points.push_back(point);
-	}
-	// 达到两点，保存线段，清空临时点集
-	if (IsCircle && points.size() == CircleNum)
-	{
-		Shaps.push_back(new CircleShap(points[0], points[1]));
-		IsCircle = false;
-		points.clear();
-	}
-}
-
+#pragma region DrawShapes
 void CChildView::DrawLine(CPoint& point)
 {
 	if (IsDrawLine && points.size() < LineNum) {
@@ -228,17 +104,57 @@ void CChildView::DrawLine(CPoint& point)
 		points.clear();
 	}
 }
-
-//绘制直线
-void CChildView::OnLineDraw()
+void CChildView::DrawCircle(CPoint& point)
 {
-	// TODO: 在此添加命令处理程序代码
-	points.clear();
-	IsDrawLine = true;
-	IsSelected = false;
-	IsSelectedSave = false;
+	if (IsCircle && points.size() < CircleNum) {
+		points.push_back(point);
+	}
+	// 达到两点，保存线段，清空临时点集
+	if (IsCircle && points.size() == CircleNum)
+	{
+		Shaps.push_back(new CircleShap(points[0], points[1]));
+		IsCircle = false;
+		points.clear();
+	}
+}
+void CChildView::DrawDot(CPaintDC& dc)
+{
+	// 绘制已保存的点（实心小圆）
+	CBrush brush(RGB(0, 0, 0));
+	CBrush* pOldBrush = dc.SelectObject(&brush);
+	const int r = 3; // 半径
+	for (const auto& pt : points)
+	{
+		dc.Ellipse(pt.x - r, pt.y - r, pt.x + r + 1, pt.y + r + 1);
+	}
+	dc.SelectObject(pOldBrush);
+}
+void CChildView::DrawRect(CPoint& point)
+{
+	if (IsRect && points.size() < RectNum) {
+		points.push_back(point);
+	}
+	// 达到两点，保存线段，清空临时点集
+	if (IsRect && points.size() == RectNum)
+	{
+
+		RectShap* newadd = new RectShap(points[0], points[1]);
+		Shaps.push_back(newadd);
+		IsRect = false;
+		points.clear();
+	}
+}
+#pragma endregion
+
+void CChildView::CheckSelectedPoint(CPoint& point)
+{
+	if (IsSelected) {
+		points.clear();
+		points.push_back(point);
+	}
 }
 
+#pragma region D2D
 BOOL CChildView::InitializeD2D()
 {
 	// 创建D2D工厂
@@ -310,7 +226,19 @@ void CChildView::ResizeD2D()
 		m_pRenderTarget->Resize(D2D1::SizeU(rc.right, rc.bottom));
 	}
 }
+#pragma endregion
 
+#pragma region onMenu
+//绘制直线
+void CChildView::OnLineDraw()
+{
+	// TODO: 在此添加命令处理程序代码
+	points.clear();
+	IsDrawLine = true;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+//绘制圆
 void CChildView::OnCircle()
 {
 	// TODO: 在此添加命令处理程序代码
@@ -319,7 +247,7 @@ void CChildView::OnCircle()
 	IsSelected = false;
 	IsSelectedSave = false;
 }
-
+//选择模式
 void CChildView::OnSelect()
 {
 	// TODO: 在此添加命令处理程序代码
@@ -327,7 +255,6 @@ void CChildView::OnSelect()
 	IsSelected = true;
 
 }
-
 
 void CChildView::OnDelete()
 {
@@ -349,6 +276,17 @@ void CChildView::OnDelete()
 	Invalidate(); // 触发重绘
 }
 
+void CChildView::OnRect()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsSelected = false;
+	IsSelectedSave = false;
+	IsRect = true;
+}
+#pragma endregion
+
+
+#pragma region Event
 void CChildView::OnSize(UINT nType, int cx, int cy)
 {
 	CWnd::OnSize(nType, cx, cy);
@@ -457,3 +395,94 @@ BOOL CChildView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 
 	return CWnd::OnMouseWheel(nFlags, zDelta, pt);
 }
+
+void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
+{
+	// TODO: 在此添加消息处理程序代码和/或调用默认值
+
+	CWnd::OnLButtonDown(nFlags, point);
+
+	if (IsSelected) {
+		//缩放结束
+		IsSelectedSave = false;
+
+		points.clear();
+		points.push_back(point);
+
+		bool found = false;
+		m_pDragged = nullptr;
+		for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+			if (!found && Shaps[i]->IsSelected(point)) {
+				// 将该图元设为选中并开始拖拽
+				Shaps[i]->ChangeSelected(point);
+				m_pDragged = Shaps[i];
+				found = true;
+			}
+			else {
+				Shaps[i]->Selected = false;
+			}
+		}
+
+		if (m_pDragged) {
+			m_bDragging = true;
+			m_lastMouse = point;
+			SetCapture(); // 捕获鼠标，保证拖拽期间接收鼠标消息
+		}
+		Invalidate();
+		return; // 选择模式下不创建新图形
+	}
+	else
+	{
+		CheckSelectedPoint(point);
+		DrawLine(point);
+		DrawCircle(point);
+		DrawRect(point);
+	}
+
+
+	Invalidate(); // 触发重绘
+}
+
+void CChildView::OnMouseMove(UINT nFlags, CPoint point)
+{
+	// TODO: 在此添加消息处理程序代码和/或调用默认值
+
+	CWnd::OnMouseMove(nFlags, point);
+	// 旋转优先处理
+	if (m_bRotating && m_pRotated) {
+		double curAngle = std::atan2(static_cast<double>(point.y - m_rotateCenter.y),
+			static_cast<double>(point.x - m_rotateCenter.x));
+		double deltaRad = curAngle - m_lastRotateAngle;
+		// 将弧度差转换为度
+		double deltaDeg = deltaRad * (180.0 / acos(-1.0));
+		if (std::abs(deltaDeg) > 1e-6) {
+			m_pRotated->Rotate(deltaDeg);
+			m_lastRotateAngle = curAngle;
+			Invalidate();
+		}
+		return;
+	}
+	if (m_bDragging && m_pDragged) {
+		// 计算偏移并移动选中图元
+		CSize delta(point.x - m_lastMouse.x, point.y - m_lastMouse.y);
+		if (delta.cx != 0 || delta.cy != 0) {
+			m_pDragged->Move(delta);
+			m_lastMouse = point;
+			Invalidate(); // 重绘以显示移动结果
+		}
+		return;
+	}
+	// 非拖拽状态下保持原有的悬停/光标逻辑
+	if (IsSelected) {
+		bool hit = false;
+		for (auto it = Shaps.rbegin(); it != Shaps.rend(); ++it) {
+			if ((*it)->IsSelected(point)) {
+				hit = true;
+				break;
+			}
+		}
+		::SetCursor(::LoadCursor(nullptr, hit ? IDC_HAND : IDC_ARROW));
+	}
+}
+#pragma endregion
+
