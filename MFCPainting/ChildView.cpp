@@ -40,6 +40,8 @@ ON_WM_RBUTTONUP()
 ON_WM_RBUTTONDOWN()
 ON_WM_MOUSEWHEEL()
 ON_COMMAND(ID_32773, &CChildView::OnRect)
+ON_COMMAND(ID_32774, &CChildView::OnTriangle)
+ON_COMMAND(ID_32775, &CChildView::OnDiamond)
 END_MESSAGE_MAP()
 
 
@@ -144,6 +146,40 @@ void CChildView::DrawRect(CPoint& point)
 		points.clear();
 	}
 }
+
+void CChildView::DrawTriangle(CPoint& point)
+{
+	if (IsTriangle && points.size() < TriangleNum) {
+		points.push_back(point);
+	}
+	// 达到两点，保存线段，清空临时点集
+	if (IsTriangle && points.size() == TriangleNum)
+	{
+
+		TriangleShap* newadd = new TriangleShap(points[0], points[1], points[2]);
+		Shaps.push_back(newadd);
+		IsTriangle = false;
+		points.clear();
+	}
+}
+void CChildView::DrawDiamond(CPoint& point)
+{
+	if (IsDiamond && points.size() < DiamondNum) {
+		points.push_back(point);
+	}
+	// 达到两点，保存线段，清空临时点集
+	if (IsDiamond && points.size() == DiamondNum)
+	{
+
+		DiamondShap* newadd = new DiamondShap(points[0], points[1]);
+		Shaps.push_back(newadd);
+		IsDiamond = false;
+		points.clear();
+
+	}
+}
+
+
 #pragma endregion
 
 void CChildView::CheckSelectedPoint(CPoint& point)
@@ -256,6 +292,15 @@ void CChildView::OnSelect()
 
 }
 
+void CChildView::OnTriangle()
+{
+	// TODO: 在此添加命令处理程序代码
+	points.clear();
+	IsTriangle = true;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+
 void CChildView::OnDelete()
 {
 	// TODO: 在此添加命令处理程序代码
@@ -282,6 +327,15 @@ void CChildView::OnRect()
 	IsSelected = false;
 	IsSelectedSave = false;
 	IsRect = true;
+}
+
+void CChildView::OnDiamond()
+{
+	// TODO: 在此添加命令处理程序代码
+	points.clear();
+	IsDiamond = true;
+	IsSelected = false;
+	IsSelectedSave = false;
 }
 #pragma endregion
 
@@ -437,11 +491,14 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 		DrawLine(point);
 		DrawCircle(point);
 		DrawRect(point);
+		DrawTriangle(point);
+		DrawDiamond(point);
 	}
 
 
 	Invalidate(); // 触发重绘
 }
+
 
 void CChildView::OnMouseMove(UINT nFlags, CPoint point)
 {
@@ -485,4 +542,6 @@ void CChildView::OnMouseMove(UINT nFlags, CPoint point)
 	}
 }
 #pragma endregion
+
+
 

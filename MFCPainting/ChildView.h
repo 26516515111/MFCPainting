@@ -40,6 +40,8 @@ protected:
 public:
 	afx_msg void OnLineDraw();
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
+	void DrawDiamond(CPoint& point);
+	void DrawTriangle(CPoint& point);
 	void DrawRect(CPoint& point);
 	void CheckSelectedPoint(CPoint& point);
 	void DrawCircle(CPoint& point);
@@ -72,10 +74,19 @@ private:
 	int CircleNum = 2;
 #pragma endregion
 
-
 #pragma region Rect
 	bool IsRect = false;
 	int RectNum = 2;
+#pragma endregion
+
+#pragma region Triangle
+	bool IsTriangle = false;
+	int TriangleNum = 3;
+#pragma endregion
+
+#pragma region DiamondShap
+	bool IsDiamond = false;
+	int DiamondNum = 2;
 #pragma endregion
 
 #pragma region Select
@@ -124,5 +135,7 @@ public:
 	afx_msg void OnRButtonDown(UINT nFlags, CPoint point);
 	afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
 	afx_msg void OnRect();
+	afx_msg void OnTriangle();
+	afx_msg void OnDiamond();
 };
 
