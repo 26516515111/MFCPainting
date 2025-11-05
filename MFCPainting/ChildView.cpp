@@ -42,6 +42,9 @@ ON_WM_MOUSEWHEEL()
 ON_COMMAND(ID_32773, &CChildView::OnRect)
 ON_COMMAND(ID_32774, &CChildView::OnTriangle)
 ON_COMMAND(ID_32775, &CChildView::OnDiamond)
+ON_COMMAND(ID_32776, &CChildView::OnPara)
+ON_COMMAND(ID_32777, &CChildView::OnCur)
+ON_COMMAND(ID_32778, &CChildView::OnPolyline)
 END_MESSAGE_MAP()
 
 
@@ -178,7 +181,44 @@ void CChildView::DrawDiamond(CPoint& point)
 
 	}
 }
+void CChildView::DrawPara(CPoint& point)
+{
+	if (IsPara && points.size() < ParaNum) {
+		points.push_back(point);
+	}
+	// 达到两点，保存线段，清空临时点集
+	if (IsPara && points.size() == ParaNum)
+	{
 
+		ParallelogramShap* newadd = new ParallelogramShap(points[0], points[1], points[2]);
+		Shaps.push_back(newadd);
+		IsPara = false;
+		points.clear();
+
+
+	}
+}
+void CChildView::DrawCur(CPoint& point)
+{
+	if (IsCur && points.size() < CurNum) {
+		points.push_back(point);
+	}
+	// 达到两点，保存线段，清空临时点集
+	if (IsCur && points.size() == CurNum)
+	{
+
+		CurveShap* newadd = new CurveShap(points[0], points[1], points[2], points[3]);
+		Shaps.push_back(newadd);
+		IsCur = false;
+		points.clear();
+	}
+}
+void CChildView::DrawPoly(CPoint& point)
+{
+	if (IsPoly) {
+		points.push_back(point);
+	}
+}
 
 #pragma endregion
 
@@ -337,6 +377,32 @@ void CChildView::OnDiamond()
 	IsSelected = false;
 	IsSelectedSave = false;
 }
+
+void CChildView::OnPara()
+{
+	// TODO: 在此添加命令处理程序代码
+	points.clear();
+	IsPara = true;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+
+void CChildView::OnCur()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsSelected = false;
+	IsSelectedSave = false;
+	IsCur = true;
+}
+void CChildView::OnPolyline()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsSelected = false;
+	IsSelectedSave = false;
+	IsPoly = true;
+}
+
+
 #pragma endregion
 
 
@@ -398,7 +464,16 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 
 	CWnd::OnRButtonDown(nFlags, point);
 
-	if (!IsSelected) return;
+	if (!IsSelected) {
+		if (IsPoly) {
+			PolylineShap* newadd = new PolylineShap(points);
+			Shaps.push_back(newadd);
+			IsPoly = false;
+			points.clear();
+			Invalidate(); // 触发重绘
+		}
+		return;
+	}
 
 	// 找当前被选中的图元优先，否则使用命中检测
 	CShap* target = nullptr;
@@ -423,6 +498,8 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 
 BOOL CChildView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 {
+	if (!IsSelected)
+		return CWnd::OnMouseWheel(nFlags, zDelta, pt);
 	// 把屏幕坐标转换为客户区坐标（MFC 传入的 pt 是屏幕坐标）
 	ScreenToClient(&pt);
 
@@ -493,11 +570,15 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 		DrawRect(point);
 		DrawTriangle(point);
 		DrawDiamond(point);
+		DrawPara(point);
+		DrawCur(point);
+		DrawPoly(point);
 	}
 
 
 	Invalidate(); // 触发重绘
 }
+
 
 
 void CChildView::OnMouseMove(UINT nFlags, CPoint point)
@@ -542,6 +623,11 @@ void CChildView::OnMouseMove(UINT nFlags, CPoint point)
 	}
 }
 #pragma endregion
+
+
+
+
+
 
 
 

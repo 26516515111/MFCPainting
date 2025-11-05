@@ -40,6 +40,9 @@ protected:
 public:
 	afx_msg void OnLineDraw();
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
+	void DrawPoly(CPoint& point);
+	void DrawCur(CPoint& point);
+	void DrawPara(CPoint& point);
 	void DrawDiamond(CPoint& point);
 	void DrawTriangle(CPoint& point);
 	void DrawRect(CPoint& point);
@@ -87,6 +90,20 @@ private:
 #pragma region DiamondShap
 	bool IsDiamond = false;
 	int DiamondNum = 2;
+#pragma endregion
+
+#pragma region ParaShap
+	bool IsPara = false;
+	int ParaNum = 3;
+#pragma endregion
+
+#pragma region CurShap
+	bool IsCur = false;
+	int CurNum = 4;
+#pragma endregion
+
+#pragma region Polyline
+	bool IsPoly = false;
 #pragma endregion
 
 #pragma region Select
@@ -137,5 +154,8 @@ public:
 	afx_msg void OnRect();
 	afx_msg void OnTriangle();
 	afx_msg void OnDiamond();
+	afx_msg void OnPara();
+	afx_msg void OnCur();
+	afx_msg void OnPolyline();
 };
 

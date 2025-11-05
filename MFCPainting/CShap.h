@@ -4,12 +4,13 @@
 //调用dx2d库
 #include <d2d1.h>
 #include <d2d1helper.h>
+#include <vector>
 #pragma comment(lib, "d2d1.lib")
 class CShap
 {
 public:
 	
-	bool Selected;
+	bool Selected = false;
 	virtual void Draw(CPaintDC* pdc) = 0;
 	virtual bool IsSelected(CPoint point) = 0;
 	virtual void ChangeSelected(CPoint point);
@@ -187,4 +188,108 @@ public:
 	void Rotate(double degrees) override;
 	CPoint GetCenter() const override;
 	void Scale(double factor, CPoint center) override;
+};
+
+class ParallelogramShap : public CShap {
+private:
+	// 双精度顶点（按顺序 A,B,C,D）
+	double x1 = 0.0, y1 = 0.0;
+	double x2 = 0.0, y2 = 0.0;
+	double x3 = 0.0, y3 = 0.0;
+	double x4 = 0.0, y4 = 0.0;
+
+	// 缓存整数顶点用于绘制
+	CPoint p1Int, p2Int, p3Int, p4Int;
+
+	// 同步整数顶点
+	void UpdateIntPoints();
+
+public:
+	// 构造：输入三个点 A,B,C（第四点 D 自动计算）
+	ParallelogramShap(CPoint a, CPoint b, CPoint c);
+
+	// 绘制/交互实现
+	void Draw(CPaintDC* pdc) override;
+	bool IsSelected(CPoint point) override;
+	void DrawSelection(CPaintDC* pdc) override;
+
+	// 变换
+	void Move(CSize delta) override;
+	void Rotate(double degrees) override;
+	void Scale(double factor, CPoint center) override;
+	CPoint GetCenter() const override;
+
+	// 默认销毁
+	void Destroy() override {}
+};
+
+// -------- 新增：三次贝塞尔曲线 CurveShap --------
+class CurveShap : public CShap {
+private:
+	// 控制点（双精度以避免缩放精度丢失）
+	double x0, y0; // 起点
+	double x1, y1; // 控制点1
+	double x2, y2; // 控制点2
+	double x3, y3; // 终点
+
+	// 采样点（用于绘制与命中检测），整数缓存
+	std::vector<CPoint> samplesInt;
+
+	// 采样精度（段数）
+	int sampleSegments = 40;
+
+	// 计算 t 处贝塞尔点（double）
+	void GetPointOnBezier(double t, double& outx, double& outy) const;
+
+	// 重新采样（在变换后调用）
+	void UpdateSamples();
+
+public:
+	// 构造：四个控制点
+	CurveShap(CPoint p0, CPoint p1, CPoint p2, CPoint p3);
+
+	// 通过 CShap 继承
+	void Draw(CPaintDC* pdc) override;
+	bool IsSelected(CPoint point) override;
+	void DrawSelection(CPaintDC* pdc) override;
+
+	// 变换
+	void Move(CSize delta) override;
+	void Rotate(double degrees) override;
+	void Scale(double factor, CPoint center) override;
+	CPoint GetCenter() const override;
+
+	// 可选销毁
+	void Destroy() override {}
+};
+
+class PolylineShap : public CShap {
+private:
+	// 双精度顶点列表
+	std::vector<double> xs;
+	std::vector<double> ys;
+
+	// 缓存整数顶点用于绘制/交互
+	std::vector<CPoint> ptsInt;
+
+	// 重建整数缓存
+	void UpdateIntPoints();
+
+public:
+	// 构造：传入顶点列表（至少 2 个点）
+	PolylineShap(const std::vector<CPoint>& points);
+
+	// 绘制与交互
+	void Draw(CPaintDC* pdc) override;
+	bool IsSelected(CPoint point) override;
+	void DrawSelection(CPaintDC* pdc) override;
+
+	// 变换
+	void Move(CSize delta) override;
+	void Rotate(double degrees) override;
+	void Scale(double factor, CPoint center) override;
+	CPoint GetCenter() const override;
+
+	// 清理
+	void Destroy() override {}
 };

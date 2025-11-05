@@ -700,3 +700,389 @@ void TriangleShap::Scale(double factor, CPoint center)
 	scalePt(x3, y3);
 	UpdateIntPoints();
 }
+
+
+// -------- ParallelogramShap 实现（追加到 CShap.cpp 末尾） --------
+
+void ParallelogramShap::UpdateIntPoints()
+{
+	p1Int.x = static_cast<int>(std::round(x1));
+	p1Int.y = static_cast<int>(std::round(y1));
+	p2Int.x = static_cast<int>(std::round(x2));
+	p2Int.y = static_cast<int>(std::round(y2));
+	p3Int.x = static_cast<int>(std::round(x3));
+	p3Int.y = static_cast<int>(std::round(y3));
+	p4Int.x = static_cast<int>(std::round(x4));
+	p4Int.y = static_cast<int>(std::round(y4));
+}
+
+ParallelogramShap::ParallelogramShap(CPoint a, CPoint b, CPoint c)
+{
+	x1 = static_cast<double>(a.x); y1 = static_cast<double>(a.y);
+	x2 = static_cast<double>(b.x); y2 = static_cast<double>(b.y);
+	x3 = static_cast<double>(c.x); y3 = static_cast<double>(c.y);
+
+	// 计算第四点 D = A + (C - B)
+	x4 = x1 + (x3 - x2);
+	y4 = y1 + (y3 - y2);
+
+	UpdateIntPoints();
+}
+
+void ParallelogramShap::Draw(CPaintDC* pdc)
+{
+	if (!pdc) return;
+	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
+	CPen pen(PS_SOLID, 1, RGB(0, 0, 0));
+	CPen* pOldPen = pdc->SelectObject(&pen);
+
+	pdc->MoveTo(p1Int);
+	pdc->LineTo(p2Int);
+	pdc->LineTo(p3Int);
+	pdc->LineTo(p4Int);
+	pdc->LineTo(p1Int);
+
+	pdc->SelectObject(pOldPen);
+	pdc->SelectObject(pOldBrush);
+}
+
+bool ParallelogramShap::IsSelected(CPoint point)
+{
+	const double tolerance = 5.0;
+	double px = static_cast<double>(point.x);
+	double py = static_cast<double>(point.y);
+
+	// 计算浮点顶点数组
+	double vx[4] = { x1, x2, x3, x4 };
+	double vy[4] = { y1, y2, y3, y4 };
+
+	// 检查到任意边的最短距离
+	for (int i = 0; i < 4; ++i) {
+		int j = (i + 1) % 4;
+		double dist = PointSegmentDistanceDouble(px, py, vx[i], vy[i], vx[j], vy[j]);
+		if (dist <= tolerance) return true;
+	}
+
+	// 内部点判断（射线法）
+	if (PointInPolygon(vx, vy, 4, px, py)) return true;
+
+	return false;
+}
+
+void ParallelogramShap::DrawSelection(CPaintDC* pdc)
+{
+	if (!Selected || !pdc) return;
+	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
+	CPen dashPen(PS_DASH, 1, RGB(0, 0, 0));
+	CPen* pOldPen = pdc->SelectObject(&dashPen);
+
+	pdc->MoveTo(p1Int);
+	pdc->LineTo(p2Int);
+	pdc->LineTo(p3Int);
+	pdc->LineTo(p4Int);
+	pdc->LineTo(p1Int);
+
+	pdc->SelectObject(pOldBrush);
+	pdc->SelectObject(pOldPen);
+}
+
+void ParallelogramShap::Move(CSize delta)
+{
+	x1 += delta.cx; y1 += delta.cy;
+	x2 += delta.cx; y2 += delta.cy;
+	x3 += delta.cx; y3 += delta.cy;
+	x4 += delta.cx; y4 += delta.cy;
+	UpdateIntPoints();
+}
+
+void ParallelogramShap::Rotate(double degrees)
+{
+	double rad = degrees * (acos(-1.0) / 180.0);
+	CPoint c = GetCenter();
+	double cx = static_cast<double>(c.x);
+	double cy = static_cast<double>(c.y);
+	RotateDoublePoint(x1, y1, cx, cy, rad);
+	RotateDoublePoint(x2, y2, cx, cy, rad);
+	RotateDoublePoint(x3, y3, cx, cy, rad);
+	RotateDoublePoint(x4, y4, cx, cy, rad);
+	UpdateIntPoints();
+}
+
+CPoint ParallelogramShap::GetCenter() const
+{
+	double cx = (x1 + x2 + x3 + x4) / 4.0;
+	double cy = (y1 + y2 + y3 + y4) / 4.0;
+	return CPoint(static_cast<int>(std::round(cx)), static_cast<int>(std::round(cy)));
+}
+
+void ParallelogramShap::Scale(double factor, CPoint center)
+{
+	double cx = static_cast<double>(center.x);
+	double cy = static_cast<double>(center.y);
+	auto scalePt = [&](double& x, double& y) {
+		x = cx + (x - cx) * factor;
+		y = cy + (y - cy) * factor;
+		};
+	scalePt(x1, y1);
+	scalePt(x2, y2);
+	scalePt(x3, y3);
+	scalePt(x4, y4);
+	UpdateIntPoints();
+}
+
+
+
+
+// 计算贝塞尔曲线 t 点
+void CurveShap::GetPointOnBezier(double t, double& outx, double& outy) const
+{
+	// 三次贝塞尔公式
+	double u = 1.0 - t;
+	double b0 = u * u * u;
+	double b1 = 3.0 * u * u * t;
+	double b2 = 3.0 * u * t * t;
+	double b3 = t * t * t;
+	outx = b0 * x0 + b1 * x1 + b2 * x2 + b3 * x3;
+	outy = b0 * y0 + b1 * y1 + b2 * y2 + b3 * y3;
+}
+
+void CurveShap::UpdateSamples()
+{
+	samplesInt.clear();
+	if (sampleSegments < 1) sampleSegments = 1;
+	samplesInt.reserve(sampleSegments + 1);
+	for (int i = 0; i <= sampleSegments; ++i) {
+		double t = static_cast<double>(i) / static_cast<double>(sampleSegments);
+		double sx, sy;
+		GetPointOnBezier(t, sx, sy);
+		samplesInt.emplace_back(static_cast<int>(std::round(sx)), static_cast<int>(std::round(sy)));
+	}
+}
+
+// 构造
+CurveShap::CurveShap(CPoint p0, CPoint p1, CPoint p2, CPoint p3)
+{
+	x0 = static_cast<double>(p0.x); y0 = static_cast<double>(p0.y);
+	x1 = static_cast<double>(p1.x); y1 = static_cast<double>(p1.y);
+	x2 = static_cast<double>(p2.x); y2 = static_cast<double>(p2.y);
+	x3 = static_cast<double>(p3.x); y3 = static_cast<double>(p3.y);
+	UpdateSamples();
+}
+
+// 绘制：用采样点绘制折线近似曲线
+void CurveShap::Draw(CPaintDC* pdc)
+{
+	if (!pdc) return;
+	if (samplesInt.empty()) UpdateSamples();
+	// 绘制为折线
+	auto it = samplesInt.begin();
+	if (it == samplesInt.end()) return;
+	pdc->MoveTo(*it);
+	for (++it; it != samplesInt.end(); ++it) {
+		pdc->LineTo(*it);
+	}
+}
+
+// 命中检测：点到采样折线段距离
+static double PointSegmentDistDoubleLocal(double px, double py, double ax, double ay, double bx, double by)
+{
+	double abx = bx - ax;
+	double aby = by - ay;
+	double apx = px - ax;
+	double apy = py - ay;
+	double ab2 = abx * abx + aby * aby;
+	double t = 0.0;
+	if (ab2 > 1e-12) t = (apx * abx + apy * aby) / ab2;
+	if (t < 0.0) t = 0.0;
+	if (t > 1.0) t = 1.0;
+	double cx = ax + t * abx;
+	double cy = ay + t * aby;
+	double dx = px - cx;
+	double dy = py - cy;
+	return std::sqrt(dx * dx + dy * dy);
+}
+
+bool CurveShap::IsSelected(CPoint point)
+{
+	const double tolerance = 5.0;
+	if (samplesInt.empty()) UpdateSamples();
+	// 逐段检测
+	for (size_t i = 0; i + 1 < samplesInt.size(); ++i) {
+		double ax = static_cast<double>(samplesInt[i].x);
+		double ay = static_cast<double>(samplesInt[i].y);
+		double bx = static_cast<double>(samplesInt[i + 1].x);
+		double by = static_cast<double>(samplesInt[i + 1].y);
+		double d = PointSegmentDistDoubleLocal(static_cast<double>(point.x), static_cast<double>(point.y), ax, ay, bx, by);
+		if (d <= tolerance) return true;
+	}
+	return false;
+}
+
+void CurveShap::DrawSelection(CPaintDC* pdc)
+{
+	if (!Selected || !pdc) return;
+	if (samplesInt.empty()) UpdateSamples();
+	CPen dashPen(PS_DASH, 1, RGB(0, 0, 0));
+	CPen* pOldPen = pdc->SelectObject(&dashPen);
+	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
+
+	pdc->MoveTo(samplesInt[0]);
+	for (size_t i = 1; i < samplesInt.size(); ++i) pdc->LineTo(samplesInt[i]);
+	// 结束恢复
+	pdc->SelectObject(pOldBrush);
+	pdc->SelectObject(pOldPen);
+}
+
+// 变换：移动
+void CurveShap::Move(CSize delta)
+{
+	x0 += delta.cx; y0 += delta.cy;
+	x1 += delta.cx; y1 += delta.cy;
+	x2 += delta.cx; y2 += delta.cy;
+	x3 += delta.cx; y3 += delta.cy;
+	UpdateSamples();
+}
+
+// 变换：旋转（绕中心）
+void CurveShap::Rotate(double degrees)
+{
+	double rad = degrees * (acos(-1.0) / 180.0);
+	CPoint c = GetCenter();
+	double cx = static_cast<double>(c.x);
+	double cy = static_cast<double>(c.y);
+	RotateDoublePoint(x0, y0, cx, cy, rad);
+	RotateDoublePoint(x1, y1, cx, cy, rad);
+	RotateDoublePoint(x2, y2, cx, cy, rad);
+	RotateDoublePoint(x3, y3, cx, cy, rad);
+	UpdateSamples();
+}
+
+// 缩放（以 center 为中心）
+void CurveShap::Scale(double factor, CPoint center)
+{
+	double cx = static_cast<double>(center.x);
+	double cy = static_cast<double>(center.y);
+	auto scalePt = [&](double& x, double& y) {
+		x = cx + (x - cx) * factor;
+		y = cy + (y - cy) * factor;
+		};
+	scalePt(x0, y0); scalePt(x1, y1); scalePt(x2, y2); scalePt(x3, y3);
+	UpdateSamples();
+}
+
+// 中心：控制点平均（可根据需要改为曲线几何中心）
+CPoint CurveShap::GetCenter() const
+{
+	double cx = (x0 + x1 + x2 + x3) / 4.0;
+	double cy = (y0 + y1 + y2 + y3) / 4.0;
+	return CPoint(static_cast<int>(std::round(cx)), static_cast<int>(std::round(cy)));
+}
+
+
+void PolylineShap::UpdateIntPoints()
+{
+	ptsInt.clear();
+	size_t n = xs.size();
+	ptsInt.reserve(n);
+	for (size_t i = 0; i < n; ++i) {
+		ptsInt.emplace_back(static_cast<int>(std::round(xs[i])), static_cast<int>(std::round(ys[i])));
+	}
+}
+
+PolylineShap::PolylineShap(const std::vector<CPoint>& points)
+{
+	xs.clear(); ys.clear();
+	for (const auto& p : points) {
+		xs.push_back(static_cast<double>(p.x));
+		ys.push_back(static_cast<double>(p.y));
+	}
+	if (xs.size() < 2) {
+		// 保证至少两个点（退化为微小线段）
+		if (xs.empty()) { xs.push_back(0); ys.push_back(0); }
+		xs.push_back(xs.back() + 1.0);
+		ys.push_back(ys.back() + 1.0);
+	}
+	UpdateIntPoints();
+}
+
+void PolylineShap::Draw(CPaintDC* pdc)
+{
+	if (!pdc || ptsInt.empty()) return;
+	auto it = ptsInt.begin();
+	pdc->MoveTo(*it);
+	for (++it; it != ptsInt.end(); ++it) pdc->LineTo(*it);
+}
+
+bool PolylineShap::IsSelected(CPoint point)
+{
+	const double tolerance = 5.0;
+	if (ptsInt.size() < 2) return false;
+
+	// 逐段检测点到线段距离
+	for (size_t i = 0; i + 1 < ptsInt.size(); ++i) {
+		double ax = static_cast<double>(ptsInt[i].x);
+		double ay = static_cast<double>(ptsInt[i].y);
+		double bx = static_cast<double>(ptsInt[i + 1].x);
+		double by = static_cast<double>(ptsInt[i + 1].y);
+		double d = PointSegmentDistanceDouble(static_cast<double>(point.x), static_cast<double>(point.y), ax, ay, bx, by);
+		if (d <= tolerance) return true;
+	}
+	// 多义线一般没有“内部”，故仅靠边缘命中
+	return false;
+}
+
+void PolylineShap::DrawSelection(CPaintDC* pdc)
+{
+	if (!Selected || !pdc || ptsInt.empty()) return;
+	CPen dashPen(PS_DASH, 1, RGB(0, 0, 0));
+	CPen* pOldPen = pdc->SelectObject(&dashPen);
+	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
+
+	pdc->MoveTo(ptsInt[0]);
+	for (size_t i = 1; i < ptsInt.size(); ++i) pdc->LineTo(ptsInt[i]);
+
+	pdc->SelectObject(pOldBrush);
+	pdc->SelectObject(pOldPen);
+}
+
+void PolylineShap::Move(CSize delta)
+{
+	for (size_t i = 0; i < xs.size(); ++i) {
+		xs[i] += delta.cx;
+		ys[i] += delta.cy;
+	}
+	UpdateIntPoints();
+}
+
+void PolylineShap::Rotate(double degrees)
+{
+	double rad = degrees * (acos(-1.0) / 180.0);
+	CPoint c = GetCenter();
+	double cx = static_cast<double>(c.x);
+	double cy = static_cast<double>(c.y);
+	for (size_t i = 0; i < xs.size(); ++i) {
+		RotateDoublePoint(xs[i], ys[i], cx, cy, rad);
+	}
+	UpdateIntPoints();
+}
+
+CPoint PolylineShap::GetCenter() const
+{
+	double sx = 0.0, sy = 0.0;
+	size_t n = xs.size();
+	for (size_t i = 0; i < n; ++i) { sx += xs[i]; sy += ys[i]; }
+	sx /= static_cast<double>(n);
+	sy /= static_cast<double>(n);
+	return CPoint(static_cast<int>(std::round(sx)), static_cast<int>(std::round(sy)));
+}
+
+void PolylineShap::Scale(double factor, CPoint center)
+{
+	double cx = static_cast<double>(center.x);
+	double cy = static_cast<double>(center.y);
+	for (size_t i = 0; i < xs.size(); ++i) {
+		xs[i] = cx + (xs[i] - cx) * factor;
+		ys[i] = cy + (ys[i] - cy) * factor;
+	}
+	UpdateIntPoints();
+}
