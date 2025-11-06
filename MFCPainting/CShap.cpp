@@ -1194,6 +1194,54 @@ void CircleShap::ShowCenter(CPaintDC* pdc)
 	pdc->SetBkMode(oldBkMode);
 }
 
+LineShap* CircleShap::CreateTangentAt(CPoint pointOnOrNearCircle, double halfLength)
+{
+	// 获取圆心与半径
+	CPoint center;
+	double radius = 0.0;
+	GetCenterAndRadius(center, radius);
+	
+
+	// 向量从圆心指向输入点
+	double vx = static_cast<double>(pointOnOrNearCircle.x - center.x);
+	double vy = static_cast<double>(pointOnOrNearCircle.y - center.y);
+	double dist = std::sqrt(vx * vx + vy * vy);
+
+	// 距离太小（几乎在圆心），无法定义切线
+	if (dist < 1e-6) return nullptr;
+
+	// 若输入点不在圆上，则将其投影到圆周（保证切线正确）
+	if (std::abs(dist - radius) > 1.0) { // 容差 1 像素
+		vx = vx / dist * radius;
+		vy = vy / dist * radius;
+		pointOnOrNearCircle.x = static_cast<int>(std::round(center.x + vx));
+		pointOnOrNearCircle.y = static_cast<int>(std::round(center.y + vy));
+		// 更新向量与距离为圆周点
+		dist = radius;
+	}
+
+	// 切线方向垂直于半径向量 (vx, vy)，取方向 (-vy, vx)
+	double tx = -vy;
+	double ty = vx;
+	double tlen = std::sqrt(tx * tx + ty * ty);
+	if (tlen < 1e-6) return nullptr;
+	tx /= tlen;
+	ty /= tlen;
+
+	// 计算切线两端点
+	CPoint p1(
+		static_cast<int>(std::round(pointOnOrNearCircle.x + tx * halfLength)),
+		static_cast<int>(std::round(pointOnOrNearCircle.y + ty * halfLength))
+	);
+	CPoint p2(
+		static_cast<int>(std::round(pointOnOrNearCircle.x - tx * halfLength)),
+		static_cast<int>(std::round(pointOnOrNearCircle.y - ty * halfLength))
+	);
+
+	// 返回新创建的 LineShap（调用者负责释放或将其加入管理容器）
+	return new LineShap(p1, p2);
+}
+
 // RectShap
 void RectShap::GetCornersInt(CPoint outCorners[4])
 {

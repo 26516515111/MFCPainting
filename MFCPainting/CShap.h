@@ -18,6 +18,7 @@ public:
 	virtual void Move(CSize delta) = 0;
 	virtual void Rotate(double degrees) = 0;
 	virtual CPoint GetCenter() const = 0;
+	virtual ~CShap() = default;
 
 	// 新增：缩放图元
 	virtual void Scale(double factor, CPoint center) = 0;
@@ -81,6 +82,8 @@ public:
 	void Scale(double factor, CPoint center) override;
 	void GetCenterAndRadius(CPoint& centerOut, double& radiusOut);
 	void ShowCenter(CPaintDC* pdc);
+
+	LineShap* CreateTangentAt(CPoint pointOnOrNearCircle, double halfLength = 100.0);
 
 };
 

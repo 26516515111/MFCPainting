@@ -142,6 +142,7 @@ protected:
 	DECLARE_MESSAGE_MAP()
 public:
 	afx_msg void OnTriangle();
+	afx_msg void OnSave();
 };
 
 CAboutDlg::CAboutDlg() noexcept : CDialogEx(IDD_ABOUTBOX)
@@ -155,6 +156,7 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
 	ON_COMMAND(ID_32774, &CAboutDlg::OnTriangle)
+	ON_COMMAND(ID_32787, &CAboutDlg::OnSave)
 END_MESSAGE_MAP()
 
 // 用于运行对话框的应用程序命令
@@ -170,6 +172,11 @@ void CMFCPaintingApp::OnAppAbout()
 
 
 void CAboutDlg::OnTriangle()
+{
+	// TODO: 在此添加命令处理程序代码
+}
+
+void CAboutDlg::OnSave()
 {
 	// TODO: 在此添加命令处理程序代码
 }

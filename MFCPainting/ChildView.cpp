@@ -20,6 +20,8 @@ CChildView::CChildView()
 
 CChildView::~CChildView()
 {
+	// 若加载过位图，释放
+	m_bitmapImage.Destroy();
 }
 
 
@@ -48,6 +50,8 @@ ON_COMMAND(ID_32778, &CChildView::OnPolyline)
 ON_COMMAND(ID_32779, &CChildView::OnIntersection)
 ON_COMMAND(ID_32780, &CChildView::OnVertical)
 ON_COMMAND(ID_32781, &CChildView::OnCircleCenter)
+ON_COMMAND(ID_32782, &CChildView::OnCenterTangent)
+ON_COMMAND(ID_32787, &CChildView::OnSave)
 END_MESSAGE_MAP()
 
 // CChildView 消息处理程序
@@ -68,6 +72,13 @@ BOOL CChildView::PreCreateWindow(CREATESTRUCT& cs)
 void CChildView::OnPaint() 
 {
 	CPaintDC dc(this); // 用于验证区域
+
+	// 若当前处于“位图查看模式”，直接绘制 BMP
+	if (m_showBitmap && !m_bitmapImage.IsNull()) {
+		// 将 BMP 贴到(0,0)。如需居中/缩放，可自行计算目标矩形
+		m_bitmapImage.Draw(dc.m_hDC, 0, 0);
+		return;
+	}
 
 		// 备用：使用原来的GDI绘制
 	for (const auto& ln : Shaps)
@@ -91,9 +102,10 @@ void CChildView::OnPaint()
 			ShapController* SC = new ShapController(AbleShapes);
 			SC->DrawIntersections(&dc);
 			AbleShapes.clear();
+			delete SC;
 		}
-		if (!targetShape) {
-			targetShape->GetCenter();
+		if (targetShape) {
+			targetShape->ShowCenter(&dc);
 			targetShape = NULL;
 		}
 		DrawDot(dc);
@@ -232,8 +244,50 @@ void CChildView::DrawPoly(CPoint& point)
 	}
 }
 
-#pragma endregion
+#pragma endregion0
+#pragma region Save
+bool CChildView::SaveAsBitmap(const CString& path)
+{
+	CRect rc;
+	GetClientRect(&rc);
+	const int w = rc.Width();
+	const int h = rc.Height();
+	if (w <= 0 || h <= 0) return false;
 
+	// 创建用于保存的 32bit 位图
+	CImage img;
+	HRESULT hrCreate = img.Create(w, h, 32);
+	if (FAILED(hrCreate)) return false;
+
+	// 抓取当前窗口客户区像素
+	CClientDC wndDC(this);
+	HDC hImgDC = img.GetDC();
+	BOOL ok = ::BitBlt(hImgDC, 0, 0, w, h, wndDC.m_hDC, 0, 0, SRCCOPY);
+	img.ReleaseDC();
+
+	if (!ok) { img.Destroy(); return false; }
+
+	// 保存为 BMP（扩展名决定格式，.bmp 即 BMP）
+	HRESULT hrSave = img.Save(path);
+	img.Destroy();
+	return SUCCEEDED(hrSave);
+}
+
+bool CChildView::LoadBitmapFile(const CString& path)
+{
+	m_bitmapImage.Destroy();
+	HRESULT hr = m_bitmapImage.Load(path);
+	if (FAILED(hr)) {
+		m_showBitmap = false;
+		return false;
+	}
+	m_showBitmap = true;
+	Invalidate(); // 触发重绘以显示位图
+	return true;
+}
+
+
+#pragma endregion
 void CChildView::CheckSelectedPoint(CPoint& point)
 {
 	if (IsSelected) {
@@ -438,7 +492,34 @@ void CChildView::OnCircleCenter()
 	IsSelected = false;
 	IsSelectedSave = false;
 }
+void CChildView::OnCenterTangent()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsCircleTangent = true;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+void CChildView::OnSave()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsSelected = false;
+	IsSelectedSave = false;
 
+	// 选择保存路径（默认扩展名 .bmp）
+	CFileDialog dlg(FALSE, _T("bmp"), _T("drawing.bmp"),
+		OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY,
+		_T("位图文件 (*.bmp)|*.bmp||"));
+	if (dlg.DoModal() != IDOK) return;
+
+	// 确保当前画面已完成重绘，避免抓屏得到旧帧/空白
+	RedrawWindow(nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+
+	const CString path = dlg.GetPathName();
+	if (!SaveAsBitmap(path)) {
+		AfxMessageBox(_T("保存失败，请确认路径或权限。"));
+		return;
+	}
+}
 #pragma endregion
 
 #pragma region Event
@@ -643,6 +724,22 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 		Invalidate();
 		return; // 选择模式下不创建新图形
 	}
+	else if (IsCircleTangent) {
+		for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+			if (!Shaps[i]) continue;
+			if (Shaps[i]->IsSelected(point)) {
+				auto pCircle = dynamic_cast<CircleShap*>(Shaps[i]);
+				if (pCircle)
+				{
+					Shaps.push_back(pCircle->CreateTangentAt(point));
+					IsCircleTangent = false;
+					break;
+				}
+			}
+		}
+		Invalidate();
+		return; // 选择模式下不创建新图形
+	}
 	else
 	{
 		CheckSelectedPoint(point);
@@ -692,7 +789,7 @@ void CChildView::OnMouseMove(UINT nFlags, CPoint point)
 		return;
 	}
 	// 非拖拽状态下保持原有的悬停/光标逻辑
-	if (IsSelected||IsInter||IsVertical) {
+	if (IsSelected||IsInter||IsVertical||IsCircleCenter||IsCircleTangent) {
 		bool hit = false;
 		for (auto it = Shaps.rbegin(); it != Shaps.rend(); ++it) {
 			if ((*it)->IsSelected(point)) {
@@ -704,16 +801,4 @@ void CChildView::OnMouseMove(UINT nFlags, CPoint point)
 	}
 }
 #pragma endregion
-
-
-
-
-
-
-
-
-
-
-
-
 

@@ -8,6 +8,7 @@
 #include<vector>
 #include<cmath>
 #include "CShap.h"
+#include <atlimage.h> 
 
 // CChildView 窗口
 
@@ -16,7 +17,6 @@ class CChildView : public CWnd
 // 构造
 public:
 	CChildView();
-
 // 特性
 public:
 
@@ -49,11 +49,21 @@ public:
 	void CheckSelectedPoint(CPoint& point);
 	void DrawCircle(CPoint& point);
 	void DrawLine(CPoint& point);
+
+	// 添加：保存/加载 BMP 的接口
+	bool SaveAsBitmap(const CString& path);
+	bool LoadBitmapFile(const CString& path);
+	void CloseBitmapView() { m_showBitmap = false; Invalidate(); } // 退出位图查看模式（回到矢量绘制）
+
+
 private:
 	std::vector<CPoint> points;
 	std::vector<CPoint> dots;
 	std::vector<CShap*> Shaps;
 
+	// 添加：位图查看状态与图像
+	CImage m_bitmapImage{};
+	bool   m_showBitmap = false;
 
 	// D2D资源
 	ID2D1Factory* m_pD2DFactory;
@@ -137,7 +147,10 @@ private:
 #pragma endregion
 #pragma region CircleCenter
 	bool IsCircleCenter = false;
-	CShap* targetShape = NULL;
+	CircleShap* targetShape = NULL;
+#pragma endregion
+#pragma region CircleTangent
+	bool IsCircleTangent = false;
 #pragma endregion
 
 
@@ -174,5 +187,7 @@ public:
 	afx_msg void OnIntersection();
 	afx_msg void OnVertical();
 	afx_msg void OnCircleCenter();
+	afx_msg void OnCenterTangent();
+	afx_msg void OnSave();
 };
 
