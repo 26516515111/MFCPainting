@@ -32,28 +32,21 @@ private:
 	CPoint endPoint;
 public:
 	LineShap(CPoint start, CPoint end);
-	
-
 	// 通过 CShap 继承
 	void Draw(CPaintDC* pdc) override;
-
 	bool IsSelected(CPoint point) override;
-
 	void DrawSelection(CPaintDC* pdc) override;
-
-
 	// 通过 CShap 继承
 	void Move(CSize delta) override;
-
-
 	// 通过 CShap 继承
 	void Rotate(double degrees) override;
-
 	CPoint GetCenter() const override;
-
-
 	// 通过 CShap 继承
 	void Scale(double factor, CPoint center) override;
+	void GetEndpoints(CPoint& a, CPoint& b); // 非 const，内部可能需要更新缓存
+	//绘制垂线
+	LineShap* CreatePerpendicularAt(CPoint pointOnOrNearLine, double halfLength = 50.0) const;
+
 
 };
 
@@ -86,6 +79,9 @@ public:
 
 	// 通过 CShap 继承
 	void Scale(double factor, CPoint center) override;
+	void GetCenterAndRadius(CPoint& centerOut, double& radiusOut);
+	void ShowCenter(CPaintDC* pdc);
+
 };
 
 class RectShap :public CShap {
@@ -125,6 +121,7 @@ public:
 	CPoint GetCenter() const override;
 
 	void Scale(double factor, CPoint center) override;
+	void GetCornersInt(CPoint outCorners[4]);
 
 };
 
@@ -155,6 +152,8 @@ public:
 	void Rotate(double degrees) override;
 	CPoint GetCenter() const override;
 	void Scale(double factor, CPoint center) override;
+	void GetIntPoints(CPoint& a, CPoint& b, CPoint& c);
+
 };
 
 class DiamondShap :public CShap {
@@ -188,6 +187,8 @@ public:
 	void Rotate(double degrees) override;
 	CPoint GetCenter() const override;
 	void Scale(double factor, CPoint center) override;
+	void GetCornersInt(CPoint outCorners[4]);
+
 };
 
 class ParallelogramShap : public CShap {
@@ -221,8 +222,9 @@ public:
 
 	// 默认销毁
 	void Destroy() override {}
-};
+	void GetIntPoints(CPoint& a, CPoint& b, CPoint& c, CPoint& d);
 
+};
 // -------- 新增：三次贝塞尔曲线 CurveShap --------
 class CurveShap : public CShap {
 private:
@@ -261,6 +263,8 @@ public:
 
 	// 可选销毁
 	void Destroy() override {}
+	const std::vector<CPoint>& GetSamplesInt();
+
 };
 
 class PolylineShap : public CShap {
@@ -292,4 +296,19 @@ public:
 
 	// 清理
 	void Destroy() override {}
+	const std::vector<CPoint>& GetIntPoints();
+};
+
+class ShapController {
+private: 
+	std::vector<CShap*> shapes;
+	
+public:
+	ShapController(std::vector<CShap*> shape);
+
+	// 新增：计算所有图形间的交点并返回（整数点）
+	std::vector<CPoint> ComputeAllIntersections() const;
+
+	// 新增：在给定设备上下文的左上角绘制交点列表（从 (2,2) 向下）
+	void DrawIntersections(CPaintDC* pdc) const;
 };

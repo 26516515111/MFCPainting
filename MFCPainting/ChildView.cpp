@@ -45,9 +45,10 @@ ON_COMMAND(ID_32775, &CChildView::OnDiamond)
 ON_COMMAND(ID_32776, &CChildView::OnPara)
 ON_COMMAND(ID_32777, &CChildView::OnCur)
 ON_COMMAND(ID_32778, &CChildView::OnPolyline)
+ON_COMMAND(ID_32779, &CChildView::OnIntersection)
+ON_COMMAND(ID_32780, &CChildView::OnVertical)
+ON_COMMAND(ID_32781, &CChildView::OnCircleCenter)
 END_MESSAGE_MAP()
-
-
 
 // CChildView 消息处理程序
 
@@ -73,24 +74,35 @@ void CChildView::OnPaint()
 		{
 			ln->Draw(&dc);
 		}
-
+	
 	if (StateCheck()) {
 			for (const auto& shp : Shaps)
 			{
-				shp->ChangeSelected(points[0]);
+				/*shp->ChangeSelected(points[0]);*/
 				if (shp->Selected) {
 					shp->DrawSelection(&dc);
 				}
 			}
 		}
 	else if(!IsSelected){
+		//绘制交点
+		if (!AbleShapes.empty()) {
+			// 计算交点
+			ShapController* SC = new ShapController(AbleShapes);
+			SC->DrawIntersections(&dc);
+			AbleShapes.clear();
+		}
+		if (!targetShape) {
+			targetShape->GetCenter();
+			targetShape = NULL;
+		}
 		DrawDot(dc);
 	}
 }
 
 bool CChildView::StateCheck()
 {
-	return IsSelected && !IsSelectedSave;
+	return IsSelected && !IsSelectedSave||IsInter;
 }
 
 #pragma region DrawShapes
@@ -344,7 +356,7 @@ void CChildView::OnTriangle()
 void CChildView::OnDelete()
 {
 	// TODO: 在此添加命令处理程序代码
-	if (IsSelected && !points.empty()) {
+	if (IsSelected) {
 		
 		for (auto it = Shaps.begin(); it!=Shaps.end();it++) {
 			CShap* shp = *it;
@@ -401,10 +413,33 @@ void CChildView::OnPolyline()
 	IsSelectedSave = false;
 	IsPoly = true;
 }
-
+//求交点
+void CChildView::OnIntersection()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsInter = true;
+	IsSelected = false;
+	IsSelectedSave = false;
+	AbleShapes.clear();
+}
+//求垂线
+void CChildView::OnVertical()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsVertical = true;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+//绘制圆心
+void CChildView::OnCircleCenter()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsCircleCenter = true;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
 
 #pragma endregion
-
 
 #pragma region Event
 void CChildView::OnSize(UINT nType, int cx, int cy)
@@ -470,8 +505,14 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 			Shaps.push_back(newadd);
 			IsPoly = false;
 			points.clear();
-			Invalidate(); // 触发重绘
 		}
+		if (IsInter) {
+			IsInter = false;
+			for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+				Shaps[i]->Selected = false;
+			}
+		}
+	    Invalidate(); // 触发重绘
 		return;
 	}
 
@@ -537,8 +578,8 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 		//缩放结束
 		IsSelectedSave = false;
 
-		points.clear();
-		points.push_back(point);
+		/*points.clear();
+		points.push_back(point);*/
 
 		bool found = false;
 		m_pDragged = nullptr;
@@ -550,7 +591,7 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 				found = true;
 			}
 			else {
-				Shaps[i]->Selected = false;
+				    Shaps[i]->Selected = false;
 			}
 		}
 
@@ -558,6 +599,46 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 			m_bDragging = true;
 			m_lastMouse = point;
 			SetCapture(); // 捕获鼠标，保证拖拽期间接收鼠标消息
+		}
+		Invalidate();
+		return; // 选择模式下不创建新图形
+	}
+	else if (IsInter) {
+		for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+			if (Shaps[i]->IsSelected(point)) {
+				Shaps[i]->ChangeSelected(point);
+				AbleShapes.push_back(Shaps[i]);
+			}
+		}
+		Invalidate();
+		return; // 选择模式下不创建新图形
+	}
+	else if (IsVertical) {
+		for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+			if (Shaps[i]->IsSelected(point)) {
+				auto pLine = dynamic_cast<LineShap*>(Shaps[i]);
+				if (pLine)
+				{
+				   Shaps.push_back(pLine->CreatePerpendicularAt(point));
+				   IsVertical = false;
+				   break;
+				}
+			}
+		}
+		Invalidate();
+		return; // 选择模式下不创建新图形
+	}
+	else if (IsCircleCenter) {
+		for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+			if (Shaps[i]->IsSelected(point)) {
+				auto pCircle = dynamic_cast<CircleShap*>(Shaps[i]);
+				if (pCircle)
+				{
+					targetShape = pCircle;
+					IsCircleCenter = false;
+					break;
+				}
+			}
 		}
 		Invalidate();
 		return; // 选择模式下不创建新图形
@@ -611,7 +692,7 @@ void CChildView::OnMouseMove(UINT nFlags, CPoint point)
 		return;
 	}
 	// 非拖拽状态下保持原有的悬停/光标逻辑
-	if (IsSelected) {
+	if (IsSelected||IsInter||IsVertical) {
 		bool hit = false;
 		for (auto it = Shaps.rbegin(); it != Shaps.rend(); ++it) {
 			if ((*it)->IsSelected(point)) {
@@ -623,6 +704,11 @@ void CChildView::OnMouseMove(UINT nFlags, CPoint point)
 	}
 }
 #pragma endregion
+
+
+
+
+
 
 
 

@@ -126,6 +126,20 @@ private:
 	CPoint m_rotateCenter; // 旋转中心（缓存）
 #pragma endregion
 
+//求交点
+#pragma region Intersection
+	bool IsInter = false;
+	std::vector<CShap*> AbleShapes;
+#pragma endregion
+
+#pragma region Vertical
+	bool IsVertical = false;
+#pragma endregion
+#pragma region CircleCenter
+	bool IsCircleCenter = false;
+	CShap* targetShape = NULL;
+#pragma endregion
+
 
 public:
 
@@ -157,5 +171,8 @@ public:
 	afx_msg void OnPara();
 	afx_msg void OnCur();
 	afx_msg void OnPolyline();
+	afx_msg void OnIntersection();
+	afx_msg void OnVertical();
+	afx_msg void OnCircleCenter();
 };
 

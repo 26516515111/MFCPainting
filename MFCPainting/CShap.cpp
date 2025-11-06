@@ -1,5 +1,10 @@
 #include "pch.h"
 #include "CShap.h"
+#include <sstream>
+#include <iomanip>
+#include <set>
+#include <string>
+#include <algorithm>
 
 
 static CPoint RotatePointAround(const CPoint& pt, const CPoint& center, double rad)
@@ -1085,4 +1090,404 @@ void PolylineShap::Scale(double factor, CPoint center)
 		ys[i] = cy + (ys[i] - cy) * factor;
 	}
 	UpdateIntPoints();
+}
+
+
+// LineShap
+void LineShap::GetEndpoints(CPoint& a, CPoint& b) { a = startPoint; b = endPoint; }
+
+LineShap* LineShap::CreatePerpendicularAt(CPoint pointOnOrNearLine, double halfLength) const
+{
+	// 线段端点
+	double x1 = static_cast<double>(startPoint.x);
+	double y1 = static_cast<double>(startPoint.y);
+	double x2 = static_cast<double>(endPoint.x);
+	double y2 = static_cast<double>(endPoint.y);
+
+	// 方向向量
+	double dx = x2 - x1;
+	double dy = y2 - y1;
+	double len2 = dx * dx + dy * dy;
+	const double EPS = 1e-9;
+	if (len2 < EPS) {
+		// 退化为点，无法生成垂线
+		return nullptr;
+	}
+
+	// 将传入点投影到由 (startPoint->endPoint) 定义的直线（保证在直线上）
+	double px = static_cast<double>(pointOnOrNearLine.x);
+	double py = static_cast<double>(pointOnOrNearLine.y);
+	double t = ((px - x1) * dx + (py - y1) * dy) / len2;
+	double projx = x1 + t * dx;
+	double projy = y1 + t * dy;
+
+	// 垂直方向向量 = (-dy, dx)，归一化
+	double vx = -dy;
+	double vy = dx;
+	double vlen = std::hypot(vx, vy);
+	if (vlen < EPS) return nullptr;
+	vx /= vlen;
+	vy /= vlen;
+
+	// 两端点
+	double ax = projx + vx * halfLength;
+	double ay = projy + vy * halfLength;
+	double bx = projx - vx * halfLength;
+	double by = projy - vy * halfLength;
+
+	CPoint a(static_cast<int>(std::lround(ax)), static_cast<int>(std::lround(ay)));
+	CPoint b(static_cast<int>(std::lround(bx)), static_cast<int>(std::lround(by)));
+
+	return new LineShap(a, b);
+}
+
+// CircleShap
+void CircleShap::GetCenterAndRadius(CPoint& centerOut, double& radiusOut)
+{
+	// 如果内部使用 double centerX/centerY，优先使用；否则回退到 centerPoint
+	centerOut.x = static_cast<int>(std::round(centerX != 0.0 || centerY != 0.0 ? centerX : centerPoint.x));
+	centerOut.y = static_cast<int>(std::round(centerY != 0.0 || centerX != 0.0 ? centerY : centerPoint.y));
+	// 半径由 rdx/rdy 或 rPoint 计算
+	if (rdx != 0.0 || rdy != 0.0) {
+		radiusOut = std::sqrt(rdx * rdx + rdy * rdy);
+	}
+	else {
+		double dx = rPoint.x - centerOut.x;
+		double dy = rPoint.y - centerOut.y;
+		radiusOut = std::sqrt(dx * dx + dy * dy);
+	}
+}
+
+void CircleShap::ShowCenter(CPaintDC* pdc)
+{
+	if (!pdc) return;
+
+	// 获取中心与半径
+	CPoint center;
+	double radius = 0.0;
+	GetCenterAndRadius(center, radius);
+
+	// 绘制圆心点（实心小圆）
+	CBrush brush(RGB(255, 0, 0)); // 红色点
+	CBrush* pOldBrush = pdc->SelectObject(&brush);
+	const int dotR = 4; // 点半径像素
+	pdc->Ellipse(center.x - dotR, center.y - dotR, center.x + dotR + 1, center.y + dotR + 1);
+	pdc->SelectObject(pOldBrush);
+
+	// 在左上角显示坐标文本
+	COLORREF oldColor = pdc->SetTextColor(RGB(0, 0, 0));
+	int oldBkMode = pdc->SetBkMode(TRANSPARENT);
+
+	CString msg;
+	msg.Format(_T("圆心: (%d, %d)  坐标: x=%.2f y=%.2f  半径=%.2f"),
+		center.x, center.y,
+		static_cast<double>(center.x), static_cast<double>(center.y),
+		radius);
+
+	// 留一点边距
+	const int textX = 2;
+	const int textY = 2;
+	pdc->TextOut(textX, textY, msg);
+
+	// 恢复原有画笔/文本属性
+	pdc->SetTextColor(oldColor);
+	pdc->SetBkMode(oldBkMode);
+}
+
+// RectShap
+void RectShap::GetCornersInt(CPoint outCorners[4])
+{
+	UpdateIntCorners();
+	for (int i = 0; i < 4; ++i) outCorners[i] = cornersInt[i];
+}
+
+// TriangleShap
+void TriangleShap::GetIntPoints(CPoint& a, CPoint& b, CPoint& c)
+{
+	UpdateIntPoints();
+	a = p1Int; b = p2Int; c = p3Int;
+}
+
+// DiamondShap
+void DiamondShap::GetCornersInt(CPoint outCorners[4])
+{
+	UpdateIntCorners();
+	for (int i = 0; i < 4; ++i) outCorners[i] = cornersInt[i];
+}
+
+// ParallelogramShap
+void ParallelogramShap::GetIntPoints(CPoint& a, CPoint& b, CPoint& c, CPoint& d)
+{
+	UpdateIntPoints();
+	a = p1Int; b = p2Int; c = p3Int; d = p4Int;
+}
+
+// CurveShap
+const std::vector<CPoint>& CurveShap::GetSamplesInt()
+{
+	UpdateSamples();
+	return samplesInt;
+}
+
+// PolylineShap
+const std::vector<CPoint>& PolylineShap::GetIntPoints()
+{
+	UpdateIntPoints();
+	return ptsInt;
+}
+
+// ---------------- - 几何工具函数（本文件作用域）---------------- -
+
+namespace {
+	const double EPS = 1e-8;
+
+	struct DPoint { double x, y; };
+	inline DPoint toD(const CPoint& p) { return { (double)p.x, (double)p.y }; }
+	inline CPoint toI(const DPoint& p) { return CPoint((int)std::lround(p.x), (int)std::lround(p.y)); }
+
+	// 线段 - 线段交点（若有交点且在段内） -> 返回 {true, point}
+	bool SegSegIntersect(const DPoint& p1, const DPoint& p2, const DPoint& p3, const DPoint& p4, DPoint& out)
+	{
+		// 参数化求解
+		double x1 = p1.x, y1 = p1.y;
+		double x2 = p2.x, y2 = p2.y;
+		double x3 = p3.x, y3 = p3.y;
+		double x4 = p4.x, y4 = p4.y;
+		double den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+		if (std::abs(den) < EPS) return false; // 平行或共线（不处理重叠段）
+		double px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den;
+		double py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den;
+		// 检查是否在两个线段上
+		auto inSeg = [&](double x, double a, double b)->bool {
+			double lo = min(a, b) - EPS, hi = max(a, b) + EPS;
+			return x >= lo && x <= hi;
+			};
+		if (inSeg(px, x1, x2) && inSeg(py, y1, y2) && inSeg(px, x3, x4) && inSeg(py, y3, y4)) {
+			out = { px, py };
+			return true;
+		}
+		return false;
+	}
+
+	// 线段 - 圆 交点（可能 0/1/2 个），返回所有位于段内的交点
+	std::vector<DPoint> SegCircleIntersect(const DPoint& p1, const DPoint& p2, const DPoint& c, double r)
+	{
+		std::vector<DPoint> res;
+		// 把线段作为 p = p1 + t*(d), t in [0,1]
+		DPoint d{ p2.x - p1.x, p2.y - p1.y };
+		DPoint f{ p1.x - c.x, p1.y - c.y };
+		double a = d.x * d.x + d.y * d.y;
+		double b = 2 * (f.x * d.x + f.y * d.y);
+		double cc = f.x * f.x + f.y * f.y - r * r;
+		double disc = b * b - 4 * a * cc;
+		if (disc < -EPS) return res;
+		disc = max(0.0, disc);
+		double sqrtD = std::sqrt(disc);
+		double t1 = (-b - sqrtD) / (2 * a);
+		double t2 = (-b + sqrtD) / (2 * a);
+		auto checkT = [&](double t) {
+			if (t + EPS >= 0.0 && t <= 1.0 + EPS) {
+				return true;
+			}
+			return false;
+			};
+		if (checkT(t1)) res.push_back({ p1.x + d.x * t1, p1.y + d.y * t1 });
+		if (disc > EPS && checkT(t2)) res.push_back({ p1.x + d.x * t2, p1.y + d.y * t2 });
+		return res;
+	}
+
+	// 圆 - 圆 交点（0/1/2）
+	std::vector<DPoint> CircleCircleIntersect(const DPoint& c1, double r1, const DPoint& c2, double r2)
+	{
+		std::vector<DPoint> res;
+		double dx = c2.x - c1.x;
+		double dy = c2.y - c1.y;
+		double d = std::hypot(dx, dy);
+		if (d < EPS) return res; // 同心或几乎同心，忽略
+		if (d > r1 + r2 + EPS) return res; // 相离
+		if (d < std::abs(r1 - r2) - EPS) return res; // 内含
+		// 求交点
+		double a = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
+		double h2 = r1 * r1 - a * a;
+		if (h2 < -EPS) return res;
+		h2 = max(0.0, h2);
+		double xm = c1.x + a * (dx) / d;
+		double ym = c1.y + a * (dy) / d;
+		double rx = -dy * (std::sqrt(h2) / d);
+		double ry = dx * (std::sqrt(h2) / d);
+		if (h2 < EPS) {
+			res.push_back({ xm, ym });
+		}
+		else {
+			res.push_back({ xm + rx, ym + ry });
+			res.push_back({ xm - rx, ym - ry });
+		}
+		return res;
+	}
+
+	// 合并近似重复点（基于 tol）
+	std::vector<CPoint> UniqueRoundPoints(const std::vector<DPoint>& in, double tol = 1e-3)
+	{
+		std::vector<DPoint> tmp = in;
+		std::vector<DPoint> out;
+		for (const auto& p : tmp) {
+			bool found = false;
+			for (const auto& q : out) {
+				if (std::hypot(p.x - q.x, p.y - q.y) <= tol) { found = true; break; }
+			}
+			if (!found) out.push_back(p);
+		}
+		std::vector<CPoint> res;
+		res.reserve(out.size());
+		for (auto& p : out) res.push_back(toI(p));
+		return res;
+	}
+}
+
+// ----------------- ShapController 实现 -----------------
+
+ShapController::ShapController(std::vector<CShap*> shape)
+	: shapes(std::move(shape))
+{
+}
+
+// 将任意 shape 转换为线段集合（以 double 表示）
+// 对于圆类型返回空线段集合（圆单独处理）
+static void ExtractSegmentsOrCircle(CShap* s,
+	std::vector<std::pair<DPoint, DPoint>>& outSegments,
+	bool& isCircle, DPoint& circleCenter, double& circleRadius)
+{
+	isCircle = false;
+	// LineShap
+	if (auto ls = dynamic_cast<LineShap*>(s)) {
+		CPoint a, b; ls->GetEndpoints(a, b);
+		outSegments.push_back({ toD(a), toD(b) });
+		return;
+	}
+	// CircleShap
+	if (auto cs = dynamic_cast<CircleShap*>(s)) {
+		CPoint c; double r;
+		cs->GetCenterAndRadius(c, r);
+		isCircle = true; circleCenter = toD(c); circleRadius = r;
+		return;
+	}
+	// Rect/Triangle/Diamond/Parallelogram -> 4-or-3-point polygon
+	if (auto rs = dynamic_cast<RectShap*>(s)) {
+		CPoint corners[4]; rs->GetCornersInt(corners);
+		for (int i = 0; i < 4; i++) {
+			outSegments.push_back({ toD(corners[i]), toD(corners[(i + 1) % 4]) });
+		}
+		return;
+	}
+	if (auto ts = dynamic_cast<TriangleShap*>(s)) {
+		CPoint a, b, c; ts->GetIntPoints(a, b, c);
+		outSegments.push_back({ toD(a), toD(b) });
+		outSegments.push_back({ toD(b), toD(c) });
+		outSegments.push_back({ toD(c), toD(a) });
+		return;
+	}
+	if (auto ds = dynamic_cast<DiamondShap*>(s)) {
+		CPoint corners[4]; ds->GetCornersInt(corners);
+		for (int i = 0; i < 4; i++) outSegments.push_back({ toD(corners[i]), toD(corners[(i + 1) % 4]) });
+		return;
+	}
+	if (auto ps = dynamic_cast<ParallelogramShap*>(s)) {
+		CPoint a, b, c, d; ps->GetIntPoints(a, b, c, d);
+		outSegments.push_back({ toD(a), toD(b) });
+		outSegments.push_back({ toD(b), toD(c) });
+		outSegments.push_back({ toD(c), toD(d) });
+		outSegments.push_back({ toD(d), toD(a) });
+		return;
+	}
+	// PolylineShap
+	if (auto pls = dynamic_cast<PolylineShap*>(s)) {
+		auto pts = pls->GetIntPoints();
+		if (pts.size() >= 2) {
+			for (size_t i = 0; i + 1 < pts.size(); ++i) outSegments.push_back({ toD(pts[i]), toD(pts[i + 1]) });
+		}
+		return;
+	}
+	// CurveShap -> 使用采样点近似
+	if (auto cs = dynamic_cast<CurveShap*>(s)) {
+		auto samp = cs->GetSamplesInt();
+		if (samp.size() >= 2) {
+			for (size_t i = 0; i + 1 < samp.size(); ++i) outSegments.push_back({ toD(samp[i]), toD(samp[i + 1]) });
+		}
+		return;
+	}
+	// 其它类型未处理
+}
+
+// 计算所有图元间交点
+std::vector<CPoint> ShapController::ComputeAllIntersections() const
+{
+	std::vector<DPoint> found;
+	// 对每一对 shapes
+	for (size_t i = 0; i < shapes.size(); ++i) {
+		for (size_t j = i + 1; j < shapes.size(); ++j) {
+			CShap* a = shapes[i];
+			CShap* b = shapes[j];
+			// 先分别提取线段集合或圆信息
+			std::vector<std::pair<DPoint, DPoint>> segA, segB;
+			bool aIsCircle = false, bIsCircle = false;
+			DPoint aC; double aR = 0.0; DPoint bC; double bR = 0.0;
+			// NOTE: ExtractSegmentsOrCircle 接受 非const CShap*；但我们在 const 成员里有 shaps 为 mutable? shaps 成员是 non-const pointers,
+			// 我们需要去掉 constness：const_cast 用于调用提取
+			ExtractSegmentsOrCircle(const_cast<CShap*>(a), segA, aIsCircle, aC, aR);
+			ExtractSegmentsOrCircle(const_cast<CShap*>(b), segB, bIsCircle, bC, bR);
+
+			// circle - circle
+			if (aIsCircle && bIsCircle) {
+				auto pts = CircleCircleIntersect(aC, aR, bC, bR);
+				for (auto& p : pts) found.push_back(p);
+				continue;
+			}
+
+			// segment - circle (either order)
+			if (aIsCircle && !bIsCircle) {
+				for (auto& seg : segB) {
+					auto pts = SegCircleIntersect(seg.first, seg.second, aC, aR);
+					for (auto& p : pts) found.push_back(p);
+				}
+				continue;
+			}
+			if (!aIsCircle && bIsCircle) {
+				for (auto& seg : segA) {
+					auto pts = SegCircleIntersect(seg.first, seg.second, bC, bR);
+					for (auto& p : pts) found.push_back(p);
+				}
+				continue;
+			}
+
+			// segment - segment 全部组合
+			for (auto& sa : segA) {
+				for (auto& sb : segB) {
+					DPoint ip;
+					if (SegSegIntersect(sa.first, sa.second, sb.first, sb.second, ip)) {
+						found.push_back(ip);
+					}
+				}
+			}
+		}
+	}
+	// 去重并四舍五入为整数点
+	auto uniqueInts = UniqueRoundPoints(found, 1e-3);
+	return uniqueInts;
+}
+
+// 在屏幕左上角绘制交点列表
+void ShapController::DrawIntersections(CPaintDC* pdc) const
+{
+	if (!pdc) return;
+	auto pts = ComputeAllIntersections();
+	int x = 2, y = 2;
+	std::wstring line;
+	for (size_t i = 0; i < pts.size(); ++i) {
+		std::wostringstream wss;
+		wss << L"(" << pts[i].x << L"," << pts[i].y << L")";
+		line = wss.str();
+		pdc->TextOutW(x, y, line.c_str());
+		y += 16; // 行间距
+		// 避免太长列表溢出：若有太多可以只显示前 N（此处显示全部）
+	}
 }
