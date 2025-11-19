@@ -143,6 +143,10 @@ protected:
 public:
 	afx_msg void OnTriangle();
 	afx_msg void OnSave();
+	afx_msg void OnBresenhamLine();
+	afx_msg void OnBresenhamCircle();
+	afx_msg void OnOnLineWidth8();
+	afx_msg void On32800();
 };
 
 CAboutDlg::CAboutDlg() noexcept : CDialogEx(IDD_ABOUTBOX)
@@ -157,6 +161,10 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
 	ON_COMMAND(ID_32774, &CAboutDlg::OnTriangle)
 	ON_COMMAND(ID_32787, &CAboutDlg::OnSave)
+	ON_COMMAND(ID_BRESENHAM32792, &CAboutDlg::OnBresenhamLine)
+	ON_COMMAND(ID_BRESENHAM32793, &CAboutDlg::OnBresenhamCircle)
+	ON_COMMAND(ID_32798, &CAboutDlg::OnOnLineWidth8)
+	ON_COMMAND(ID_32800, &CAboutDlg::On32800)
 END_MESSAGE_MAP()
 
 // 用于运行对话框的应用程序命令
@@ -177,6 +185,26 @@ void CAboutDlg::OnTriangle()
 }
 
 void CAboutDlg::OnSave()
+{
+	// TODO: 在此添加命令处理程序代码
+}
+
+void CAboutDlg::OnBresenhamLine()
+{
+	// TODO: 在此添加命令处理程序代码
+}
+
+void CAboutDlg::OnBresenhamCircle()
+{
+	// TODO: 在此添加命令处理程序代码
+}
+
+void CAboutDlg::OnOnLineWidth8()
+{
+	// TODO: 在此添加命令处理程序代码
+}
+
+void CAboutDlg::On32800()
 {
 	// TODO: 在此添加命令处理程序代码
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <algorithm>
 #include <afxwin.h>
 //调用dx2d库
 #include <d2d1.h>
@@ -31,8 +32,11 @@ class LineShap :public CShap {
 private:
 	CPoint startPoint;
 	CPoint endPoint;
+	int DrawMethod; // 0-中点画线法，1-Bresenham画线法
+	int lineWidth;
+	int lineStyle;
 public:
-	LineShap(CPoint start, CPoint end);
+	LineShap(CPoint start, CPoint end, int drawmethod = 0, int w = 1, int style = 0);
 	// 通过 CShap 继承
 	void Draw(CPaintDC* pdc) override;
 	bool IsSelected(CPoint point) override;
@@ -47,8 +51,16 @@ public:
 	void GetEndpoints(CPoint& a, CPoint& b); // 非 const，内部可能需要更新缓存
 	//绘制垂线
 	LineShap* CreatePerpendicularAt(CPoint pointOnOrNearLine, double halfLength = 50.0) const;
+	//中点画线法
+	void Draw_b(CPaintDC* pdc);
+	//Bresenham画线法
+	void Draw_B(CPaintDC* pdc);
 
-
+	void SetLineWidth(int w) { lineWidth = max(1, w); }
+	void SetLineStyle(int s) { lineStyle = std::clamp(s, 0, 3); }
+	int  GetLineWidth() const { return lineWidth; }
+	int  GetLineStyle() const { return lineStyle; }
+	
 };
 
 class CircleShap :public CShap {
@@ -56,6 +68,9 @@ class CircleShap :public CShap {
 private:
 	CPoint centerPoint;
 	CPoint rPoint;
+	int DrawMethod;
+	int lineWidth;
+	int lineStyle;// 0-solid 1-dash 2-dot 3-dashdot
 
 	// 高精度内部表示，避免每次缩放累积精度丢失
 	double centerX = 0.0;
@@ -64,10 +79,15 @@ private:
 	double rdy = 0.0;
 public:
 
-	CircleShap(CPoint center, CPoint r);
+	CircleShap(CPoint center, CPoint r,int Drawmethod = 0, int w = 1, int style = 0);
 
 	// 通过 CShap 继承
 	void Draw(CPaintDC* pdc) override;
+	// 中点画园
+	void CDraw_b(CPaintDC* pdc);
+	//bersenham画圆
+	void CDraw_B(CPaintDC* pdc);
+
 	bool IsSelected(CPoint point) override;
 	void DrawSelection(CPaintDC* pdc) override;
 
@@ -84,7 +104,10 @@ public:
 	void ShowCenter(CPaintDC* pdc);
 
 	LineShap* CreateTangentAt(CPoint pointOnOrNearCircle, double halfLength = 100.0);
-
+	void SetLineWidth(int w) { lineWidth = max(1, w); }
+	void SetLineStyle(int s) { lineStyle = std::clamp(s, 0, 3); }
+	int  GetLineWidth() const { return lineWidth; }
+	int  GetLineStyle() const { return lineStyle; }
 };
 
 class RectShap :public CShap {

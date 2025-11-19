@@ -57,9 +57,11 @@ public:
 
 
 private:
-	std::vector<CPoint> points;
-	std::vector<CPoint> dots;
-	std::vector<CShap*> Shaps;
+	int m_currentLineWidth = 1;
+	int m_currentLineStyle = 0; // 0-solid 1-dash 2-dot 3-dashdot
+	std::vector<CPoint> points;//存储绘制图形的点
+	std::vector<CPoint> dots;//存储绘制的辅助点
+	std::vector<CShap*> Shaps;//存储绘制的图形
 
 	// 添加：位图查看状态与图像
 	CImage m_bitmapImage{};
@@ -80,11 +82,13 @@ private:
 #pragma region Line
 	bool IsDrawLine = false;
 	int LineNum = 2;
+	int DrawLineMode = 0;
 #pragma endregion
 
 #pragma region Circle
 	bool IsCircle = false;
 	int CircleNum = 2;
+	int DrawCirclesMode = 0;
 #pragma endregion
 
 #pragma region Rect
@@ -155,7 +159,8 @@ private:
 
 
 public:
-
+	void ApplyWidthToSelection(int w);
+	void ApplyStyleToSelection(int s);
 
 	afx_msg void OnCircle();
 	afx_msg void OnSelect();
@@ -189,5 +194,19 @@ public:
 	afx_msg void OnCircleCenter();
 	afx_msg void OnCenterTangent();
 	afx_msg void OnSave();
+	afx_msg void OnLine_1();
+	afx_msg void OnBresenham_Line();
+	afx_msg void OnMiddleLine();
+	afx_msg void OnBresenhamLine();
+	afx_msg void OnMiddleCircle();
+	afx_msg void OnBresenhamCircle();
+	afx_msg void OnLineWidth1();
+	afx_msg void OnOnLineWidth2();
+	afx_msg void OnOnLineWidth4();
+	afx_msg void OnLineShape0();
+	afx_msg void OnOnLineShape1();
+	afx_msg void OnOnLineShape2();
+	afx_msg void OnOnLineShape3();
+	afx_msg void OnLineWidth8();
 };
 

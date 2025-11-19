@@ -7,6 +7,32 @@
 #include <algorithm>
 
 
+
+// 通用像素样式判断辅助（内部静态）
+static bool PixelPatternShouldDraw(int idx, int style)
+{
+	// idx 为序号（沿主迭代的步数），style 参考定义
+	switch (style)
+	{
+	case 0: return true; // solid
+	case 1: { // dash: 画5跳3
+		int m = idx % 8;
+		return m < 5;
+	}
+	case 2: { // dot: 画1跳3
+		int m = idx % 4;
+		return m == 0;
+	}
+	case 3: { // dashdot: 画5跳3画1跳3循环 (总长: 5+3+1+3=12)
+		int m = idx % 12;
+		if (m < 5) return true;          // dash
+		if (m >= 8 && m == 8) return true; // single dot at position 8
+		return false;
+	}
+	default: return true;
+	}
+}
+
 static CPoint RotatePointAround(const CPoint& pt, const CPoint& center, double rad)
 {
 	double dx = static_cast<double>(pt.x - center.x);
@@ -18,16 +44,34 @@ static CPoint RotatePointAround(const CPoint& pt, const CPoint& center, double r
 	return CPoint(static_cast<int>(std::round(center.x + rx)), static_cast<int>(std::round(center.y + ry)));
 }
 
-LineShap::LineShap(CPoint start, CPoint end)
+LineShap::LineShap(CPoint start, CPoint end,int drawmethod, int w, int style)
 {
 	startPoint = start;
 	endPoint = end;
+	DrawMethod = drawmethod;
+	lineWidth = max(1, w);
+	lineStyle = std::clamp(style, 0, 3);
 }
 
 void LineShap::Draw(CPaintDC* pdc)
 {
+	if (DrawMethod == 1) { // 中点法加粗
+		Draw_b(pdc);
+		return;
+	}
+	else if (DrawMethod == 2) { // Bresenham 加粗
+		Draw_B(pdc);
+		return;
+	}
+	// 普通 GDI
+	CPen pen(lineStyle == 0 ? PS_SOLID :
+		lineStyle == 1 ? PS_DASH :
+		lineStyle == 2 ? PS_DOT : PS_DASHDOT,
+		lineWidth, RGB(0, 0, 0));
+	CPen* old = pdc->SelectObject(&pen);
 	pdc->MoveTo(startPoint);
 	pdc->LineTo(endPoint);
+	pdc->SelectObject(old);
 }
 
 bool LineShap::IsSelected(CPoint point)
@@ -75,7 +119,13 @@ void LineShap::DrawSelection(CPaintDC* pdc)
 	// 使用虚线笔绘制
 	CPen pen(PS_DASH, 1, RGB(0, 0, 0));
 	CPen* pOldPen = pdc->SelectObject(&pen);
-	this->Draw(pdc);
+	int originalDrawMethod = DrawMethod;
+	DrawMethod = 0;
+	pdc->MoveTo(startPoint);
+	pdc->LineTo(endPoint);
+
+	pdc->SelectObject(pOldPen);
+	DrawMethod = originalDrawMethod;
 }
 
 void LineShap::Move(CSize delta)
@@ -110,32 +160,204 @@ void LineShap::Scale(double factor, CPoint center)
 	scalePoint(endPoint);
 }
 
-CircleShap::CircleShap(CPoint center, CPoint r)
+CircleShap::CircleShap(CPoint center, CPoint r,int drawmethod,int w,int style)
 {
 	centerPoint = center;
 	rPoint = r;
-
-	centerX = static_cast<double>(center.x);
-	centerY = static_cast<double>(center.y);
-	rdx = static_cast<double>(r.x - center.x);
-	rdy = static_cast<double>(r.y - center.y);
+	centerX = (double)center.x;
+	centerY = (double)center.y;
+	rdx = (double)(r.x - center.x);
+	rdy = (double)(r.y - center.y);
+	DrawMethod = drawmethod;
+	lineWidth = max(1, w);
+	lineStyle = std::clamp(style, 0, 3);
 }
 
 void CircleShap::Draw(CPaintDC* pdc)
 {
-	// 以高精度计算半径并在绘制时四舍五入为像素
+	if (DrawMethod == 1) { CDraw_b(pdc); return; }
+	else if (DrawMethod == 2) { CDraw_B(pdc); return; }
+
 	double radius_d = std::sqrt(rdx * rdx + rdy * rdy);
-	int r = static_cast<int>(std::round(radius_d));
+	int r = (int)std::round(radius_d);
 
-	// 更新整数副本（兼容旧代码）
-	centerPoint.x = static_cast<int>(std::round(centerX));
-	centerPoint.y = static_cast<int>(std::round(centerY));
-	rPoint.x = centerPoint.x + static_cast<int>(std::round(rdx));
-	rPoint.y = centerPoint.y + static_cast<int>(std::round(rdy));
-
-	CBrush* pOld = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
+	// 使用 GDI 画粗圆（只画边，不填充内部）
+	CPen pen(lineStyle == 0 ? PS_SOLID :
+		lineStyle == 1 ? PS_DASH :
+		lineStyle == 2 ? PS_DOT : PS_DASHDOT,
+		lineWidth, RGB(0, 0, 0));
+	CPen* oldPen = pdc->SelectObject(&pen);
+	CBrush* oldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
 	pdc->Ellipse(centerPoint.x - r, centerPoint.y - r, centerPoint.x + r + 1, centerPoint.y + r + 1);
-	pdc->SelectObject(pOld);
+	pdc->SelectObject(oldPen);
+	pdc->SelectObject(oldBrush);
+}
+
+// 替换/新增 CircleShap::CDraw_b —— 中点圆算法 + 线宽(lineWidth) + 线型(lineStyle)
+static bool CirclePatternShouldDrawMid(int idx, int style)
+{
+	switch (style)
+	{
+	case 0: return true;                    // solid
+	case 1: { int m = idx % 8;  return m < 5; }               // dash 5画3空
+	case 2: { return (idx % 4) == 0; }                        // dot 1画3空
+	case 3: { int m = idx % 12; return (m < 5) || (m == 8); } // dashdot: 5画3空1画3空
+	default: return true;
+	}
+}
+
+void CircleShap::CDraw_b(CPaintDC* pdc)
+{
+	if (!pdc) return;
+
+	// 基础半径
+	int dx = rPoint.x - centerPoint.x;
+	int dy = rPoint.y - centerPoint.y;
+	int r = (int)(std::sqrt((double)dx * dx + (double)dy * dy) + 0.5);
+	if (r <= 0) { // 退化
+		pdc->SetPixel(centerPoint.x, centerPoint.y, RGB(0, 0, 0));
+		return;
+	}
+
+	const int thick = max(1, lineWidth);
+	const int half = (thick - 1) / 2;
+
+	// 绘制一个“粗点”——简易方块加粗（可换成环或圆形点，当前足够满足线宽要求）
+	auto PutThick = [&](int px, int py, int idx)
+		{
+			if (!CirclePatternShouldDrawMid(idx, lineStyle)) return;
+			if (thick == 1)
+			{
+				pdc->SetPixel(px, py, RGB(0, 0, 0));
+				return;
+			}
+			for (int oy = -half; oy <= half; ++oy)
+				for (int ox = -half; ox <= half; ++ox)
+					pdc->SetPixel(px + ox, py + oy, RGB(0, 0, 0));
+		};
+
+	// 八向对称
+	auto Plot8 = [&](int x, int y, int& idx)
+		{
+			int cx = centerPoint.x;
+			int cy = centerPoint.y;
+			PutThick(cx + x, cy + y, idx++);
+			PutThick(cx - x, cy + y, idx++);
+			PutThick(cx + x, cy - y, idx++);
+			PutThick(cx - x, cy - y, idx++);
+			PutThick(cx + y, cy + x, idx++);
+			PutThick(cx - y, cy + x, idx++);
+			PutThick(cx + y, cy - x, idx++);
+			PutThick(cx - y, cy - x, idx++);
+		};
+
+	// 中点圆算法初始化
+	int x = 0;
+	int y = r;
+	int d = 1 - r;
+	int patternIndex = 0;
+
+	Plot8(x, y, patternIndex);
+	while (x < y)
+	{
+		++x;
+		if (d < 0)
+		{
+			d += 2 * x + 1;
+		}
+		else
+		{
+			--y;
+			d += 2 * (x - y) + 1;
+		}
+		Plot8(x, y, patternIndex);
+	}
+}
+
+void CircleShap::CDraw_B(CPaintDC* pdc)
+{
+	if (!pdc) return;
+
+	// 计算半径（使用当前 rPoint 与 centerPoint）
+	int dx = rPoint.x - centerPoint.x;
+	int dy = rPoint.y - centerPoint.y;
+	int r = (int)(std::sqrt(dx * dx + dy * dy) + 0.5);
+	if (r <= 0) return;
+
+	// 线宽参数
+	int thick = max(1, lineWidth);
+	int half = (thick - 1) / 2;
+
+	// 线型模式判定（同直线逻辑）
+	auto PatternDraw = [&](int stepIndex)->bool {
+		switch (lineStyle)
+		{
+		case 0: return true; // solid
+		case 1: { // dash: 画5跳3
+			int m = stepIndex % 8;
+			return m < 5;
+		}
+		case 2: { // dot: 画1跳3
+			int m = stepIndex % 4;
+			return m == 0;
+		}
+		case 3: { // dashdot: 画5跳3画1跳3 (总周期12)
+			int m = stepIndex % 12;
+			if (m < 5) return true;      // dash
+			if (m == 8) return true;     // dot
+			return false;
+		}
+		default: return true;
+		}
+		};
+
+	// 绘制一个点（考虑线宽：使用局部小块，简单近似）
+	auto PutPixelThick = [&](int px, int py, int stepIndex) {
+		if (!PatternDraw(stepIndex)) return;
+		if (thick == 1) {
+			pdc->SetPixel(px, py, RGB(0, 0, 0));
+		}
+		else {
+			for (int oy = -half; oy <= half; ++oy)
+				for (int ox = -half; ox <= half; ++ox)
+					pdc->SetPixel(px + ox, py + oy, RGB(0, 0, 0));
+		}
+		};
+
+	// 八向对称绘制
+	auto Plot8 = [&](int x, int y, int stepIndex) {
+		int cx = centerPoint.x;
+		int cy = centerPoint.y;
+		PutPixelThick(cx + x, cy + y, stepIndex);
+		PutPixelThick(cx - x, cy + y, stepIndex);
+		PutPixelThick(cx + x, cy - y, stepIndex);
+		PutPixelThick(cx - x, cy - y, stepIndex);
+		PutPixelThick(cx + y, cy + x, stepIndex);
+		PutPixelThick(cx - y, cy + x, stepIndex);
+		PutPixelThick(cx + y, cy - x, stepIndex);
+		PutPixelThick(cx - y, cy - x, stepIndex);
+		};
+
+	// Bresenham 初始化
+	int x = 0;
+	int y = r;
+	int d = 3 - 2 * r;
+	int stepIndex = 0;
+
+	Plot8(x, y, stepIndex++);
+
+	while (x <= y) {
+		++x;
+		if (d < 0) {
+			d += 4 * x + 6;
+		}
+		else {
+			d += 4 * (x - y) + 10;
+			--y;
+		}
+		Plot8(x, y, stepIndex++);
+	}
+
 }
 
 bool CircleShap::IsSelected(CPoint point)
@@ -177,8 +399,15 @@ void CircleShap::Move(CSize delta)
 {
 	centerX += delta.cx;
 	centerY += delta.cy;
-	centerPoint.x = static_cast<int>(std::round(centerX));
-	centerPoint.y = static_cast<int>(std::round(centerY));
+	centerPoint.x = (int)std::round(centerX);
+	centerPoint.y = (int)std::round(centerY);
+
+	// 关键：同时平移 rPoint，保持 rPoint - centerPoint 的向量不变
+	rPoint.Offset(delta);
+
+	// 若使用 rdx/rdy 的分支，也可同步更新，避免以后混用造成差异
+	rdx = (double)(rPoint.x - centerPoint.x);
+	rdy = (double)(rPoint.y - centerPoint.y);
 }
 
 void CircleShap::Rotate(double degrees)
@@ -1139,6 +1368,164 @@ LineShap* LineShap::CreatePerpendicularAt(CPoint pointOnOrNearLine, double halfL
 	CPoint b(static_cast<int>(std::lround(bx)), static_cast<int>(std::lround(by)));
 
 	return new LineShap(a, b);
+}
+
+void LineShap::Draw_b(CPaintDC* pdc)
+{
+	// 为简洁复用原算法结构，添加粗线绘制辅助 lambda
+	if (!pdc) return;
+
+	// 用于样式判断与粗线绘制
+	auto PlotThickPixel = [&](int cx, int cy, int stepIndex)
+		{
+			if (!PixelPatternShouldDraw(stepIndex, lineStyle)) return;
+			int half = (lineWidth - 1) / 2;
+			if (lineWidth == 1) {
+				pdc->SetPixel(cx, cy, RGB(0, 0, 0));
+				return;
+			}
+			// 简易法向扩展：垂直方向
+			for (int dy = -half; dy <= half; ++dy)
+				pdc->SetPixel(cx, cy + dy, RGB(0, 0, 0));
+		};
+
+	// 保证左到右
+	if (startPoint.x > endPoint.x) std::swap(startPoint, endPoint);
+
+	// 垂直线
+	if (startPoint.x == endPoint.x) {
+		if (startPoint.y > endPoint.y) std::swap(startPoint, endPoint);
+		int stepIndex = 0;
+		for (int y = startPoint.y; y <= endPoint.y; ++y)
+			PlotThickPixel(startPoint.x, y, stepIndex++);
+		return;
+	}
+
+	float m = (float)(endPoint.y - startPoint.y) / (endPoint.x - startPoint.x);
+	int stepIndex = 0;
+
+	if (m >= 0 && m <= 1) {
+		int dx = endPoint.x - startPoint.x;
+		int dy = endPoint.y - startPoint.y;
+		int d = 2 * dy - dx;
+		int incrE = 2 * dy;
+		int incrNE = 2 * (dy - dx);
+		int x = startPoint.x;
+		int y = startPoint.y;
+		PlotThickPixel(x, y, stepIndex++);
+		while (x < endPoint.x) {
+			if (d <= 0) { d += incrE; ++x; }
+			else { d += incrNE; ++x; ++y; }
+			PlotThickPixel(x, y, stepIndex++);
+		}
+	}
+	else if (m > 1) {
+		int dx = endPoint.x - startPoint.x;
+		int dy = endPoint.y - startPoint.y;
+		int d = dy - 2 * dx;
+		int incrN = -2 * dx;
+		int incrNE = 2 * (dy - dx);
+		int x = startPoint.x;
+		int y = startPoint.y;
+		PlotThickPixel(x, y, stepIndex++);
+		while (y < endPoint.y) {
+			if (d <= 0) { d += incrNE; ++x; ++y; }
+			else { d += incrN; ++y; }
+			PlotThickPixel(x, y, stepIndex++);
+		}
+	}
+	else if (m < 0 && m >= -1) {
+		int dx = endPoint.x - startPoint.x;
+		int dy = endPoint.y - startPoint.y;
+		int d = 2 * dy + dx;
+		int incrE = 2 * dy;
+		int incrSE = 2 * (dy + dx);
+		int x = startPoint.x;
+		int y = startPoint.y;
+		PlotThickPixel(x, y, stepIndex++);
+		while (x < endPoint.x) {
+			if (d <= 0) { d += incrSE; ++x; --y; }
+			else { d += incrE; ++x; }
+			PlotThickPixel(x, y, stepIndex++);
+		}
+	}
+	else { // m < -1
+		int dx = endPoint.x - startPoint.x;
+		int dy = endPoint.y - startPoint.y;
+		int d = dy + 2 * dx;
+		int incrS = 2 * dx;
+		int incrSE = 2 * (dy + dx);
+		int x = startPoint.x;
+		int y = startPoint.y;
+		PlotThickPixel(x, y, stepIndex++);
+		while (y > endPoint.y) {
+			if (d <= 0) { d += incrS; --y; }
+			else { d += incrSE; ++x; --y; }
+			PlotThickPixel(x, y, stepIndex++);
+		}
+	}
+}
+
+void LineShap::Draw_B(CPaintDC* pdc)
+{
+	if (!pdc) return;
+	auto PlotThickPixel = [&](int cx, int cy, int stepIndex)
+		{
+			if (!PixelPatternShouldDraw(stepIndex, lineStyle)) return;
+			int half = (lineWidth - 1) / 2;
+			if (lineWidth == 1) {
+				pdc->SetPixel(cx, cy, RGB(0, 0, 0));
+				return;
+			}
+			for (int dy = -half; dy <= half; ++dy)
+				pdc->SetPixel(cx, cy + dy, RGB(0, 0, 0));
+		};
+
+	int x0 = startPoint.x;
+	int y0 = startPoint.y;
+	int x1 = endPoint.x;
+	int y1 = endPoint.y;
+
+	if (x0 > x1) { std::swap(startPoint, endPoint); x0 = startPoint.x; y0 = startPoint.y; x1 = endPoint.x; y1 = endPoint.y; }
+
+	// 垂直线
+	if (x0 == x1) {
+		if (y0 > y1) std::swap(y0, y1);
+		int stepIndex = 0;
+		for (int y = y0; y <= y1; ++y)
+			PlotThickPixel(x0, y, stepIndex++);
+		return;
+	}
+
+	int dx = x1 - x0;
+	int dy = y1 - y0;
+	float m = (float)dy / dx;
+	int stepIndex = 0;
+
+	if (std::fabs(m) <= 1.0f) {
+		int y = y0;
+		int S = (dy > 0) ? 1 : -1;
+		int absDy = std::abs(dy);
+		int error = 2 * absDy - dx;
+		for (int x = x0; x <= x1; ++x) {
+			PlotThickPixel(x, y, stepIndex++);
+			if (error > 0) { y += S; error -= 2 * dx; }
+			error += 2 * absDy;
+		}
+	}
+	else {
+		if (y0 > y1) { std::swap(x0, x1); std::swap(y0, y1); dx = x1 - x0; dy = y1 - y0; }
+		int x = x0;
+		int S = (dx > 0) ? 1 : -1;
+		int absDx = std::abs(dx);
+		int error = 2 * absDx - (y1 - y0);
+		for (int y = y0; y <= y1; ++y) {
+			PlotThickPixel(x, y, stepIndex++);
+			if (error > 0) { x += S; error -= 2 * (y1 - y0); }
+			error += 2 * absDx;
+		}
+	}
+
 }
 
 // CircleShap

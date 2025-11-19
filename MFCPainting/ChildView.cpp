@@ -52,6 +52,20 @@ ON_COMMAND(ID_32780, &CChildView::OnVertical)
 ON_COMMAND(ID_32781, &CChildView::OnCircleCenter)
 ON_COMMAND(ID_32782, &CChildView::OnCenterTangent)
 ON_COMMAND(ID_32787, &CChildView::OnSave)
+ON_COMMAND(ID_32788, &CChildView::OnLine_1)
+ON_COMMAND(ID_32789, &CChildView::OnBresenham_Line)
+ON_COMMAND(ID_32790, &CChildView::OnMiddleLine)
+ON_COMMAND(ID_BRESENHAM32792, &CChildView::OnBresenhamLine)
+ON_COMMAND(ID_32791, &CChildView::OnMiddleCircle)
+ON_COMMAND(ID_BRESENHAM32793, &CChildView::OnBresenhamCircle)
+ON_COMMAND(ID_32794, &CChildView::OnLineWidth1)
+ON_COMMAND(ID_32795, &CChildView::OnOnLineWidth2)
+ON_COMMAND(ID_32799, &CChildView::OnOnLineWidth4)
+ON_COMMAND(ID_32800, &CChildView::OnLineShape0)
+ON_COMMAND(ID_32801, &CChildView::OnOnLineShape1)
+ON_COMMAND(ID_32802, &CChildView::OnOnLineShape2)
+ON_COMMAND(ID_32803, &CChildView::OnOnLineShape3)
+ON_COMMAND(ID_32798, &CChildView::OnLineWidth8)
 END_MESSAGE_MAP()
 
 // CChildView 消息处理程序
@@ -127,12 +141,14 @@ void CChildView::DrawLine(CPoint& point)
 	if (IsDrawLine && points.size() == LineNum)
 	{
 		
-		LineShap *newadd = new LineShap(points[0],points[1]);
+		LineShap* newadd = new LineShap(points[0], points[1], DrawLineMode, m_currentLineWidth, m_currentLineStyle);
 		Shaps.push_back(newadd);
 		IsDrawLine = false;
 		points.clear();
+		DrawLineMode = 0;
 	}
 }
+
 void CChildView::DrawCircle(CPoint& point)
 {
 	if (IsCircle && points.size() < CircleNum) {
@@ -141,9 +157,10 @@ void CChildView::DrawCircle(CPoint& point)
 	// 达到两点，保存线段，清空临时点集
 	if (IsCircle && points.size() == CircleNum)
 	{
-		Shaps.push_back(new CircleShap(points[0], points[1]));
+		Shaps.push_back(new CircleShap(points[0], points[1], DrawCirclesMode, m_currentLineWidth, m_currentLineStyle));
 		IsCircle = false;
 		points.clear();
+		DrawCirclesMode = 0;
 	}
 }
 void CChildView::DrawDot(CPaintDC& dc)
@@ -244,7 +261,7 @@ void CChildView::DrawPoly(CPoint& point)
 	}
 }
 
-#pragma endregion0
+#pragma endregion
 #pragma region Save
 bool CChildView::SaveAsBitmap(const CString& path)
 {
@@ -288,6 +305,7 @@ bool CChildView::LoadBitmapFile(const CString& path)
 
 
 #pragma endregion
+
 void CChildView::CheckSelectedPoint(CPoint& point)
 {
 	if (IsSelected) {
@@ -380,6 +398,33 @@ void CChildView::OnLineDraw()
 	IsSelected = false;
 	IsSelectedSave = false;
 }
+void CChildView::OnLine_1()
+{
+}
+void CChildView::OnBresenham_Line()
+{
+}
+void CChildView::OnMiddleLine()
+{
+	// TODO: 在此添加命令处理程序代码
+	points.clear();
+	IsDrawLine = true;
+	DrawLineMode = 1;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+void CChildView::OnBresenhamLine()
+{
+	// TODO: 在此添加命令处理程序代码
+	// TODO: 在此添加命令处理程序代码
+	points.clear();
+	IsDrawLine = true;
+	DrawLineMode = 2;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+
+
 //绘制圆
 void CChildView::OnCircle()
 {
@@ -389,6 +434,26 @@ void CChildView::OnCircle()
 	IsSelected = false;
 	IsSelectedSave = false;
 }
+void CChildView::OnMiddleCircle()
+{
+	// TODO: 在此添加命令处理程序代码
+	points.clear();
+	IsCircle = true;
+	DrawCirclesMode = 1;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+void CChildView::OnBresenhamCircle()
+{
+	// TODO: 在此添加命令处理程序代码
+	points.clear();
+	IsCircle = true;
+	DrawCirclesMode = 2;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+
+
 //选择模式
 void CChildView::OnSelect()
 {
@@ -520,6 +585,52 @@ void CChildView::OnSave()
 		return;
 	}
 }
+
+void CChildView::OnLineWidth1()
+{
+	// TODO: 在此添加命令处理程序代码
+	m_currentLineWidth = 1; ApplyWidthToSelection(1); Invalidate();
+}
+void CChildView::OnOnLineWidth2()
+{
+	// TODO: 在此添加命令处理程序代码
+	m_currentLineWidth = 2; ApplyWidthToSelection(2); Invalidate();
+}
+
+void CChildView::OnOnLineWidth4()
+{
+	// TODO: 在此添加命令处理程序代码
+	m_currentLineWidth = 4; ApplyWidthToSelection(4); Invalidate();
+}
+void CChildView::OnLineWidth8()
+{
+	// TODO: 在此添加命令处理程序代码
+	m_currentLineWidth = 8; ApplyWidthToSelection(8); Invalidate();
+}
+void CChildView::OnLineShape0()
+{
+	// TODO: 在此添加命令处理程序代码
+	m_currentLineStyle = 0; ApplyStyleToSelection(0); Invalidate();
+}
+
+void CChildView::OnOnLineShape1()
+{
+	// TODO: 在此添加命令处理程序代码
+	m_currentLineStyle = 1; ApplyStyleToSelection(1); Invalidate();
+}
+
+void CChildView::OnOnLineShape2()
+{
+	// TODO: 在此添加命令处理程序代码
+	m_currentLineStyle = 2; ApplyStyleToSelection(2); Invalidate();
+}
+
+void CChildView::OnOnLineShape3()
+{
+	// TODO: 在此添加命令处理程序代码
+	m_currentLineStyle = 3; ApplyStyleToSelection(3); Invalidate();
+}
+
 #pragma endregion
 
 #pragma region Event
@@ -801,4 +912,31 @@ void CChildView::OnMouseMove(UINT nFlags, CPoint point)
 	}
 }
 #pragma endregion
+
+// 添加两个辅助（放在 cpp 末尾或合适位置）
+void CChildView::ApplyWidthToSelection(int w)
+{
+	if (!IsSelected) return;
+	for (auto* shp : Shaps) {
+		if (shp->Selected) {
+			if (auto ln = dynamic_cast<LineShap*>(shp)) ln->SetLineWidth(w);
+			if (auto ci = dynamic_cast<CircleShap*>(shp)) ci->SetLineWidth(w);
+		}
+	}
+}
+void CChildView::ApplyStyleToSelection(int s)
+{
+	if (!IsSelected) return;
+	for (auto* shp : Shaps) {
+		if (shp->Selected) {
+			if (auto ln = dynamic_cast<LineShap*>(shp)) ln->SetLineStyle(s);
+			if (auto ci = dynamic_cast<CircleShap*>(shp)) ci->SetLineStyle(s);
+		}
+	}
+}
+
+
+
+
+
 
