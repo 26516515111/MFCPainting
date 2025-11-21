@@ -157,21 +157,6 @@ void CChildView::OnPaint()
 		return;
 	}
 
-
-	// 其它图形直接用 GDI 绘制
-	for (auto* shp : Shaps) {
-		if (!dynamic_cast<LineShap*>(shp) && !dynamic_cast<CircleShap*>(shp)) {
-			shp->Draw(&dc);              // 这里仍传 CPaintDC*，保持兼容
-		}
-	}
-	for (auto* shp : Shaps) {
-		if (shp->Selected &&
-			!dynamic_cast<LineShap*>(shp) &&
-			!dynamic_cast<CircleShap*>(shp)) {
-			shp->DrawSelection(&dc);
-		}
-	}
-
 	// 仅用 D2D 绘制直线与圆
 	if (m_dx2d.IsReady() && m_dx2d.BeginDraw()) {
 		m_dx2d.Clear(D2D1::ColorF(D2D1::ColorF::White));
@@ -186,6 +171,19 @@ void CChildView::OnPaint()
 		m_dx2d.EndDraw();
 	}
 
+	// 其它图形直接用 GDI 绘制
+	for (auto* shp : Shaps) {
+		if (!dynamic_cast<LineShap*>(shp) && !dynamic_cast<CircleShap*>(shp)) {
+			shp->Draw(&dc);              // 这里仍传 CPaintDC*，保持兼容
+		}
+	}
+	for (auto* shp : Shaps) {
+		if (shp->Selected &&
+			!dynamic_cast<LineShap*>(shp) &&
+			!dynamic_cast<CircleShap*>(shp)) {
+			shp->DrawSelection(&dc);
+		}
+	}
 
 	// 辅助点 / 交点 / 圆心
 	if (!IsSelected) {
