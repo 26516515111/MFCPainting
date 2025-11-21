@@ -9,6 +9,8 @@
 #include "CShap.h"
 #include <atlimage.h> 
 #include "Dx2D.h"
+#include <memory>
+#include<stack>
 
 // CChildView 窗口
 
@@ -210,6 +212,14 @@ private:
 	bool   IsBarrierFill = false;
 	CImage m_fillImage;       // 填充后的整幅位图（叠加显示）
 	bool   m_hasFillImage = false;
+	COLORREF m_fillColor = RGB(255, 0, 0); // 填充颜色，默认为红色
+	CImage m_canvasImage;
+	// 填充算法
+	void ResetAllModes(); // 重置所有模式的辅助函数
+	void FlattenFillToCanvas(); // 新增：将填充结果固化到画布上
+	void PerformFill(CPoint seedPoint);
+	void SeedFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor);
+	void ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor);
 public:
 	afx_msg void OnSeedFillMode();
 	afx_msg void OnBarrierFillMode();

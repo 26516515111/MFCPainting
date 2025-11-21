@@ -13,10 +13,10 @@ class CShap
 public:
 	
 	bool Selected = false;
-	virtual void Draw(CPaintDC* pdc) = 0;
+	virtual void Draw(CDC* pdc) = 0;
 	virtual bool IsSelected(CPoint point) = 0;
 	virtual void ChangeSelected(CPoint point);
-	virtual void DrawSelection(CPaintDC* pdc) = 0;
+	virtual void DrawSelection(CDC* pdc) = 0;
 	virtual void Move(CSize delta) = 0;
 	virtual void Rotate(double degrees) = 0;
 	virtual CPoint GetCenter() const = 0;
@@ -39,9 +39,9 @@ private:
 public:
 	LineShap(CPoint start, CPoint end, int drawmethod = 0, int w = 1, int style = 0);
 	// 通过 CShap 继承
-	void Draw(CPaintDC* pdc) override;
+	void Draw(CDC* pdc) override;
 	bool IsSelected(CPoint point) override;
-	void DrawSelection(CPaintDC* pdc) override;
+	void DrawSelection(CDC* pdc) override;
 	// 通过 CShap 继承
 	void Move(CSize delta) override;
 	// 通过 CShap 继承
@@ -53,9 +53,9 @@ public:
 	//绘制垂线
 	LineShap* CreatePerpendicularAt(CPoint pointOnOrNearLine, double halfLength = 50.0) const;
 	//中点画线法
-	void Draw_b(CPaintDC* pdc);
+	void Draw_b(CDC* pdc);
 	//Bresenham画线法
-	void Draw_B(CPaintDC* pdc);
+	void Draw_B(CDC* pdc);
 
 	void DrawD2D(CDx2D& dx);
 	void DrawSelectionD2D(CDx2D& dx);
@@ -88,14 +88,14 @@ public:
 	CircleShap(CPoint center, CPoint r,int Drawmethod = 0, int w = 1, int style = 0);
 
 	// 通过 CShap 继承
-	void Draw(CPaintDC* pdc) override;
+	void Draw(CDC* pdc) override;
 	// 中点画园
-	void CDraw_b(CPaintDC* pdc);
+	void CDraw_b(CDC* pdc);
 	//bersenham画圆
-	void CDraw_B(CPaintDC* pdc);
+	void CDraw_B(CDC* pdc);
 
 	bool IsSelected(CPoint point) override;
-	void DrawSelection(CPaintDC* pdc) override;
+	void DrawSelection(CDC* pdc) override;
 
 	// 通过 CShap 继承
 	void Move(CSize delta) override;
@@ -143,11 +143,11 @@ public:
 
 
 	// 通过 CShap 继承
-	void Draw(CPaintDC* pdc) override;
+	void Draw(CDC* pdc) override;
 
 	bool IsSelected(CPoint point) override;
 
-	void DrawSelection(CPaintDC* pdc) override;
+	void DrawSelection(CDC* pdc) override;
 
 	void Move(CSize delta) override;
 
@@ -180,9 +180,9 @@ public:
 	TriangleShap(CPoint a, CPoint b, CPoint c);
 
 	// 通过 CShap 继承
-	void Draw(CPaintDC* pdc) override;
+	void Draw(CDC* pdc) override;
 	bool IsSelected(CPoint point) override;
-	void DrawSelection(CPaintDC* pdc) override;
+	void DrawSelection(CDC* pdc) override;
 	void Move(CSize delta) override;
 	void Rotate(double degrees) override;
 	CPoint GetCenter() const override;
@@ -215,9 +215,9 @@ public:
 	DiamondShap(CPoint topLeft, CPoint bottomRight);
 
 	// 通过 CShap 继承
-	void Draw(CPaintDC* pdc) override;
+	void Draw(CDC* pdc) override;
 	bool IsSelected(CPoint point) override;
-	void DrawSelection(CPaintDC* pdc) override;
+	void DrawSelection(CDC* pdc) override;
 	void Move(CSize delta) override;
 	void Rotate(double degrees) override;
 	CPoint GetCenter() const override;
@@ -245,9 +245,9 @@ public:
 	ParallelogramShap(CPoint a, CPoint b, CPoint c);
 
 	// 绘制/交互实现
-	void Draw(CPaintDC* pdc) override;
+	void Draw(CDC* pdc) override;
 	bool IsSelected(CPoint point) override;
-	void DrawSelection(CPaintDC* pdc) override;
+	void DrawSelection(CDC* pdc) override;
 
 	// 变换
 	void Move(CSize delta) override;
@@ -286,9 +286,9 @@ public:
 	CurveShap(CPoint p0, CPoint p1, CPoint p2, CPoint p3);
 
 	// 通过 CShap 继承
-	void Draw(CPaintDC* pdc) override;
+	void Draw(CDC* pdc) override;
 	bool IsSelected(CPoint point) override;
-	void DrawSelection(CPaintDC* pdc) override;
+	void DrawSelection(CDC* pdc) override;
 
 	// 变换
 	void Move(CSize delta) override;
@@ -319,9 +319,9 @@ public:
 	PolylineShap(const std::vector<CPoint>& points);
 
 	// 绘制与交互
-	void Draw(CPaintDC* pdc) override;
+	void Draw(CDC* pdc) override;
 	bool IsSelected(CPoint point) override;
-	void DrawSelection(CPaintDC* pdc) override;
+	void DrawSelection(CDC* pdc) override;
 
 	// 变换
 	void Move(CSize delta) override;
@@ -345,5 +345,5 @@ public:
 	std::vector<CPoint> ComputeAllIntersections() const;
 
 	// 新增：在给定设备上下文的左上角绘制交点列表（从 (2,2) 向下）
-	void DrawIntersections(CPaintDC* pdc) const;
+	void DrawIntersections(CDC* pdc) const;
 };

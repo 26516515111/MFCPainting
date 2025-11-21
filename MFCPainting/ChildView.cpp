@@ -135,6 +135,17 @@ void CChildView::OnPaint()
 	//}
 	CPaintDC dc(this);
 
+	// 1. 绘制持久画布作为背景
+	if (!m_canvasImage.IsNull()) {
+		m_canvasImage.Draw(dc.m_hDC, 0, 0);
+	}
+	else {
+		// 如果画布因故为空，则填充白色背景
+		CRect rc;
+		GetClientRect(&rc);
+		dc.FillSolidRect(&rc, RGB(255, 255, 255));
+	}
+
 	// 若存在填充后的叠加位图，优先绘制并返回
 	if (m_hasFillImage && !m_fillImage.IsNull()) {
 		m_fillImage.Draw(dc.m_hDC, 0, 0);
@@ -144,6 +155,21 @@ void CChildView::OnPaint()
 	if (m_showBitmap && !m_bitmapImage.IsNull()) {
 		m_bitmapImage.Draw(dc.m_hDC, 0, 0);
 		return;
+	}
+
+
+	// 其它图形直接用 GDI 绘制
+	for (auto* shp : Shaps) {
+		if (!dynamic_cast<LineShap*>(shp) && !dynamic_cast<CircleShap*>(shp)) {
+			shp->Draw(&dc);              // 这里仍传 CPaintDC*，保持兼容
+		}
+	}
+	for (auto* shp : Shaps) {
+		if (shp->Selected &&
+			!dynamic_cast<LineShap*>(shp) &&
+			!dynamic_cast<CircleShap*>(shp)) {
+			shp->DrawSelection(&dc);
+		}
 	}
 
 	// 仅用 D2D 绘制直线与圆
@@ -160,19 +186,6 @@ void CChildView::OnPaint()
 		m_dx2d.EndDraw();
 	}
 
-	// 其它图形直接用 GDI 绘制
-	for (auto* shp : Shaps) {
-		if (!dynamic_cast<LineShap*>(shp) && !dynamic_cast<CircleShap*>(shp)) {
-			shp->Draw(&dc);              // 这里仍传 CPaintDC*，保持兼容
-		}
-	}
-	for (auto* shp : Shaps) {
-		if (shp->Selected &&
-			!dynamic_cast<LineShap*>(shp) &&
-			!dynamic_cast<CircleShap*>(shp)) {
-			shp->DrawSelection(&dc);
-		}
-	}
 
 	// 辅助点 / 交点 / 圆心
 	if (!IsSelected) {
@@ -398,6 +411,8 @@ void CChildView::OnSeedFillMode()
 	IsBarrierFill = false;
 	IsSelected = false;
 	IsSelectedSave = false;
+	m_hasFillImage = false; // 清除旧的填充结果
+	Invalidate();
 }
 
 void CChildView::OnBarrierFillMode()
@@ -407,11 +422,14 @@ void CChildView::OnBarrierFillMode()
 	IsSeedFill = false;
 	IsSelected = false;
 	IsSelectedSave = false;
+	m_hasFillImage = false; // 清除旧的填充结果
+	Invalidate();
 }
 //绘制直线
 void CChildView::OnLineDraw()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsDrawLine = true;
 	IsSelected = false;
@@ -426,6 +444,7 @@ void CChildView::OnBresenham_Line()
 void CChildView::OnMiddleLine()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsDrawLine = true;
 	DrawLineMode = 1;
@@ -436,6 +455,7 @@ void CChildView::OnBresenhamLine()
 {
 	// TODO: 在此添加命令处理程序代码
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsDrawLine = true;
 	DrawLineMode = 2;
@@ -448,6 +468,7 @@ void CChildView::OnBresenhamLine()
 void CChildView::OnCircle()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsCircle = true;
 	IsSelected = false;
@@ -456,6 +477,7 @@ void CChildView::OnCircle()
 void CChildView::OnMiddleCircle()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsCircle = true;
 	DrawCirclesMode = 1;
@@ -465,6 +487,7 @@ void CChildView::OnMiddleCircle()
 void CChildView::OnBresenhamCircle()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsCircle = true;
 	DrawCirclesMode = 2;
@@ -477,6 +500,7 @@ void CChildView::OnBresenhamCircle()
 void CChildView::OnSelect()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsSelected = true;
 
@@ -485,6 +509,7 @@ void CChildView::OnSelect()
 void CChildView::OnTriangle()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsTriangle = true;
 	IsSelected = false;
@@ -514,6 +539,7 @@ void CChildView::OnDelete()
 void CChildView::OnRect()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	IsSelected = false;
 	IsSelectedSave = false;
 	IsRect = true;
@@ -522,6 +548,7 @@ void CChildView::OnRect()
 void CChildView::OnDiamond()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsDiamond = true;
 	IsSelected = false;
@@ -531,6 +558,7 @@ void CChildView::OnDiamond()
 void CChildView::OnPara()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	points.clear();
 	IsPara = true;
 	IsSelected = false;
@@ -540,6 +568,7 @@ void CChildView::OnPara()
 void CChildView::OnCur()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	IsSelected = false;
 	IsSelectedSave = false;
 	IsCur = true;
@@ -547,6 +576,7 @@ void CChildView::OnCur()
 void CChildView::OnPolyline()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	IsSelected = false;
 	IsSelectedSave = false;
 	IsPoly = true;
@@ -555,6 +585,7 @@ void CChildView::OnPolyline()
 void CChildView::OnIntersection()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	IsInter = true;
 	IsSelected = false;
 	IsSelectedSave = false;
@@ -564,6 +595,7 @@ void CChildView::OnIntersection()
 void CChildView::OnVertical()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	IsVertical = true;
 	IsSelected = false;
 	IsSelectedSave = false;
@@ -572,6 +604,7 @@ void CChildView::OnVertical()
 void CChildView::OnCircleCenter()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	IsCircleCenter = true;
 	IsSelected = false;
 	IsSelectedSave = false;
@@ -579,6 +612,7 @@ void CChildView::OnCircleCenter()
 void CChildView::OnCenterTangent()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	IsCircleTangent = true;
 	IsSelected = false;
 	IsSelectedSave = false;
@@ -586,6 +620,7 @@ void CChildView::OnCenterTangent()
 void CChildView::OnSave()
 {
 	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
 	IsSelected = false;
 	IsSelectedSave = false;
 
@@ -658,7 +693,17 @@ void CChildView::OnSize(UINT nType, int cx, int cy)
 	CWnd::OnSize(nType, cx, cy);
 	if (cx > 0 && cy > 0) {
 		m_dx2d.Resize((UINT)cx, (UINT)cy);
+
+		// 新增：窗口大小改变时，重新创建画布
+		if (!m_canvasImage.IsNull()) {
+			m_canvasImage.Destroy();
+		}
+		m_canvasImage.Create(cx, cy, 32);
+		CDC* pDC = CDC::FromHandle(m_canvasImage.GetDC());
+		pDC->FillSolidRect(0, 0, cx, cy, RGB(255, 255, 255));
+		m_canvasImage.ReleaseDC();
 	}
+
 }
 
 void CChildView::OnDestroy()
@@ -676,6 +721,16 @@ int CChildView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	// TODO:  在此添加您专用的创建代码
 	m_dx2d.Initialize(this->m_hWnd);
+	// 新增：初始化画布
+	CRect rc;
+	GetClientRect(&rc);
+	if (rc.Width() > 0 && rc.Height() > 0) {
+		m_canvasImage.Create(rc.Width(), rc.Height(), 32);
+		CDC* pDC = CDC::FromHandle(m_canvasImage.GetDC());
+		pDC->FillSolidRect(&rc, RGB(255, 255, 255));
+		m_canvasImage.ReleaseDC();
+	}
+
 	return 0;
 }
 
@@ -710,6 +765,13 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
 
 	CWnd::OnRButtonDown(nFlags, point);
+
+	if (IsSeedFill || IsBarrierFill) {
+		FlattenFillToCanvas();
+		ResetAllModes();
+		IsSelected = true; // 返回到选择模式
+		return;
+	}
 
 	if (!IsSelected) {
 		if (IsPoly) {
@@ -785,6 +847,12 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
 
 	CWnd::OnLButtonDown(nFlags, point);
+
+	// 如果是填充模式，执行填充并返回
+	if (IsSeedFill || IsBarrierFill) {
+		PerformFill(point);
+		return;
+	}
 
 	if (IsSelected) {
 		//缩放结束
@@ -955,13 +1023,6 @@ void CChildView::ApplyStyleToSelection(int s)
 	}
 }
 
-
-
-
-
-
-
-
 BOOL CChildView::OnEraseBkgnd(CDC* pDC)
 {
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
@@ -970,7 +1031,213 @@ BOOL CChildView::OnEraseBkgnd(CDC* pDC)
 }
 
 #pragma region Filed
+void CChildView::ResetAllModes()
+{
+	IsDrawLine = false;
+	IsCircle = false;
+	IsSelected = false;
+	IsRect = false;
+	IsTriangle = false;
+	IsDiamond = false;
+	IsPara = false;
+	IsCur = false;
+	IsPoly = false;
+	IsInter = false;
+	IsVertical = false;
+	IsCircleCenter = false;
+	IsCircleTangent = false;
+	IsSeedFill = false;
+	IsBarrierFill = false;
 
+	// 清理相关状态
+	points.clear();
+	AbleShapes.clear();
+	if (m_hasFillImage) {
+		m_hasFillImage = false;
+		Invalidate(); // 如果之前有填充，需要重绘以清除
+	}
+}
+void CChildView::FlattenFillToCanvas()
+{
+	if (!m_hasFillImage || m_fillImage.IsNull()) return;
+
+	// 将填充结果位图绘制到持久画布上
+	CDC* pCanvasDC = CDC::FromHandle(m_canvasImage.GetDC());
+	m_fillImage.Draw(pCanvasDC->GetSafeHdc(), 0, 0);
+	m_canvasImage.ReleaseDC();
+
+	// 清空矢量图形列表，因为它们已经被“固化”到画布里了
+	for (auto* shp : Shaps) {
+		delete shp;
+	}
+	Shaps.clear();
+
+	// 重置填充状态并重绘
+	m_hasFillImage = false;
+	m_fillImage.Destroy();
+	Invalidate();
+}
+void CChildView::PerformFill(CPoint seedPoint)
+{
+	// 1. 准备一个与窗口同样大小的 CImage 用于绘制和填充
+	CRect rc;
+	GetClientRect(&rc);
+	if (m_fillImage.IsNull()) {
+		m_fillImage.Create(rc.Width(), rc.Height(), 32);
+	}
+
+	// 2. 在 CImage 的 DC 上绘制所有图形
+	CDC* pImageDC = CDC::FromHandle(m_fillImage.GetDC());
+
+	// 先画上当前的画布
+	if (!m_canvasImage.IsNull()) {
+		m_canvasImage.Draw(pImageDC->GetSafeHdc(), 0, 0);
+	}
+	else {
+		pImageDC->FillSolidRect(&rc, RGB(255, 255, 255)); // 如果画布为空，则清空为白色
+	}
+
+	// 再画上所有矢量图形
+	for (auto* shp : Shaps) {
+		if (auto ln = dynamic_cast<LineShap*>(shp)) ln->Draw(pImageDC);
+		else if (auto cir = dynamic_cast<CircleShap*>(shp)) cir->Draw(pImageDC);
+		else shp->Draw(pImageDC);
+	}
+	//pImageDC->FillSolidRect(&rc, RGB(255, 255, 255)); // 清空为白色背景
+
+	//// 绘制 GDI 图形
+	//for (auto* shp : Shaps) {
+	//	if (!dynamic_cast<LineShap*>(shp) && !dynamic_cast<CircleShap*>(shp)) {
+	//		shp->Draw(pImageDC);
+	//	}
+	//}
+	//// 绘制 D2D 图形（需要一个适配器）
+	//// 注意：这里简化处理，直接在内存DC上用GDI重绘D2D图形，以获取像素数据
+	//for (auto* shp : Shaps) {
+	//	if (auto ln = dynamic_cast<LineShap*>(shp)) ln->Draw(pImageDC);
+	//	else if (auto cir = dynamic_cast<CircleShap*>(shp)) cir->Draw(pImageDC);
+	//}
+
+	// 3. 确定边界颜色和种子点颜色
+	COLORREF boundaryColor = RGB(0, 0, 0); // 假设边界总是黑色
+	COLORREF seedColor = m_fillImage.GetPixel(seedPoint.x, seedPoint.y);
+
+	// 如果点击在边界上或已填充区域，则不操作
+	if (seedColor == boundaryColor || seedColor == m_fillColor) {
+		m_fillImage.ReleaseDC();
+		return;
+	}
+
+	// 4. 根据模式选择填充算法
+	if (IsSeedFill) {
+		SeedFill(m_fillImage, seedPoint, m_fillColor, boundaryColor);
+	}
+	else if (IsBarrierFill) {
+		ScanlineFill(m_fillImage, seedPoint, m_fillColor, boundaryColor);
+	}
+
+	m_fillImage.ReleaseDC();
+
+	// 5. 设置标志并重绘窗口
+	m_hasFillImage = true;
+	Invalidate();
+}
+
+void CChildView::SeedFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor)
+{
+	if (img.IsNull()) return;
+
+	int width = img.GetWidth();
+	int height = img.GetHeight();
+	COLORREF oldColor = img.GetPixel(seed.x, seed.y);
+
+	if (oldColor == fillColor || oldColor == boundaryColor) {
+		return;
+	}
+
+	std::stack<CPoint> points;
+	points.push(seed);
+
+	while (!points.empty()) {
+		CPoint pt = points.top();
+		points.pop();
+
+		if (pt.x < 0 || pt.x >= width || pt.y < 0 || pt.y >= height) {
+			continue;
+		}
+
+		if (img.GetPixel(pt.x, pt.y) == oldColor) {
+			img.SetPixel(pt.x, pt.y, fillColor);
+
+			points.push(CPoint(pt.x + 1, pt.y));
+			points.push(CPoint(pt.x - 1, pt.y));
+			points.push(CPoint(pt.x, pt.y + 1));
+			points.push(CPoint(pt.x, pt.y - 1));
+		}
+	}
+
+}
+
+void CChildView::ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor)
+{
+	if (img.IsNull()) return;
+
+	int width = img.GetWidth();
+	int height = img.GetHeight();
+	COLORREF oldColor = img.GetPixel(seed.x, seed.y);
+
+	if (oldColor == fillColor || oldColor == boundaryColor) {
+		return;
+	}
+
+	std::stack<CPoint> seeds;
+	seeds.push(seed);
+
+	while (!seeds.empty()) {
+		CPoint currentSeed = seeds.top();
+		seeds.pop();
+
+		int x = currentSeed.x;
+		int y = currentSeed.y;
+
+		// 找到当前扫描线的左边界
+		int xLeft = x;
+		while (xLeft >= 0 && img.GetPixel(xLeft, y) != boundaryColor && img.GetPixel(xLeft, y) != fillColor) {
+			xLeft--;
+		}
+		xLeft++;
+
+		// 找到当前扫描线的右边界
+		int xRight = x;
+		while (xRight < width && img.GetPixel(xRight, y) != boundaryColor && img.GetPixel(xRight, y) != fillColor) {
+			xRight++;
+		}
+		xRight--;
+
+		// 填充当前扫描线段
+		for (int i = xLeft; i <= xRight; ++i) {
+			img.SetPixel(i, y, fillColor);
+		}
+
+		// 在上方和下方扫描线寻找新的种子点
+		for (int i = xLeft; i <= xRight; ++i) {
+			// 上方
+			if (y > 0) {
+				COLORREF colorAbove = img.GetPixel(i, y - 1);
+				if (colorAbove != boundaryColor && colorAbove != fillColor) {
+					seeds.push(CPoint(i, y - 1));
+				}
+			}
+			// 下方
+			if (y < height - 1) {
+				COLORREF colorBelow = img.GetPixel(i, y + 1);
+				if (colorBelow != boundaryColor && colorBelow != fillColor) {
+					seeds.push(CPoint(i, y + 1));
+				}
+			}
+		}
+	}
+}
 #pragma endregion
 
 

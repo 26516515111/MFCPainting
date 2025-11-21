@@ -53,7 +53,7 @@ LineShap::LineShap(CPoint start, CPoint end,int drawmethod, int w, int style)
 	lineStyle = std::clamp(style, 0, 3);
 }
 
-void LineShap::Draw(CPaintDC* pdc)
+void LineShap::Draw(CDC* pdc)
 {
 	if (DrawMethod == 1) { // 中点法加粗
 		Draw_b(pdc);
@@ -112,7 +112,7 @@ bool LineShap::IsSelected(CPoint point)
 	return dist <= tolerance;
 }
 
-void LineShap::DrawSelection(CPaintDC* pdc)
+void LineShap::DrawSelection(CDC* pdc)
 {
 	if (!Selected) return;
 
@@ -173,7 +173,7 @@ CircleShap::CircleShap(CPoint center, CPoint r,int drawmethod,int w,int style)
 	lineStyle = std::clamp(style, 0, 3);
 }
 
-void CircleShap::Draw(CPaintDC* pdc)
+void CircleShap::Draw(CDC* pdc)
 {
 	if (DrawMethod == 1) { CDraw_b(pdc); return; }
 	else if (DrawMethod == 2) { CDraw_B(pdc); return; }
@@ -206,7 +206,7 @@ static bool CirclePatternShouldDrawMid(int idx, int style)
 	}
 }
 
-void CircleShap::CDraw_b(CPaintDC* pdc)
+void CircleShap::CDraw_b(CDC* pdc)
 {
 	if (!pdc) return;
 
@@ -274,7 +274,7 @@ void CircleShap::CDraw_b(CPaintDC* pdc)
 	}
 }
 
-void CircleShap::CDraw_B(CPaintDC* pdc)
+void CircleShap::CDraw_B(CDC* pdc)
 {
 	if (!pdc) return;
 
@@ -376,7 +376,7 @@ bool CircleShap::IsSelected(CPoint point)
 	 return  std::abs(dist - radius) <= tolerance;
 }
 
-void CircleShap::DrawSelection(CPaintDC* pdc)
+void CircleShap::DrawSelection(CDC* pdc)
 {
 	if (!Selected) return;
 
@@ -516,7 +516,7 @@ DiamondShap::DiamondShap(CPoint topLeft, CPoint bottomRight)
 	UpdateIntCorners();
 }
 
-void DiamondShap::Draw(CPaintDC* pdc)
+void DiamondShap::Draw(CDC* pdc)
 {
 	if (!pdc) return;
 	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
@@ -580,7 +580,7 @@ bool DiamondShap::IsSelected(CPoint point)
 	return false;
 }
 
-void DiamondShap::DrawSelection(CPaintDC* pdc)
+void DiamondShap::DrawSelection(CDC* pdc)
 {
 	if (!Selected || !pdc) return;
 	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
@@ -665,7 +665,7 @@ RectShap::RectShap(CPoint topLeft, CPoint bottomRight)
 	UpdateIntCorners();
 }
 
-void RectShap::Draw(CPaintDC* pdc)
+void RectShap::Draw(CDC* pdc)
 {
 	if (!pdc) return;
 
@@ -715,7 +715,7 @@ bool RectShap::IsSelected(CPoint point)
 	return false;
 }
 
-void RectShap::DrawSelection(CPaintDC* pdc)
+void RectShap::DrawSelection(CDC* pdc)
 {
 	if (!Selected || !pdc) return;
 
@@ -799,7 +799,7 @@ TriangleShap::TriangleShap(CPoint a, CPoint b, CPoint c)
 	UpdateIntPoints();
 }
 
-void TriangleShap::Draw(CPaintDC* pdc)
+void TriangleShap::Draw(CDC* pdc)
 {
 	if (!pdc) return;
 	// 使用空画刷只绘制轮廓
@@ -876,7 +876,7 @@ bool TriangleShap::IsSelected(CPoint point)
 	return false;
 }
 
-void TriangleShap::DrawSelection(CPaintDC* pdc)
+void TriangleShap::DrawSelection(CDC* pdc)
 {
 	if (!Selected || !pdc) return;
 	// 虚线笔绘制三角形轮廓
@@ -963,7 +963,7 @@ ParallelogramShap::ParallelogramShap(CPoint a, CPoint b, CPoint c)
 	UpdateIntPoints();
 }
 
-void ParallelogramShap::Draw(CPaintDC* pdc)
+void ParallelogramShap::Draw(CDC* pdc)
 {
 	if (!pdc) return;
 	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
@@ -1003,7 +1003,7 @@ bool ParallelogramShap::IsSelected(CPoint point)
 	return false;
 }
 
-void ParallelogramShap::DrawSelection(CPaintDC* pdc)
+void ParallelogramShap::DrawSelection(CDC* pdc)
 {
 	if (!Selected || !pdc) return;
 	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
@@ -1104,7 +1104,7 @@ CurveShap::CurveShap(CPoint p0, CPoint p1, CPoint p2, CPoint p3)
 }
 
 // 绘制：用采样点绘制折线近似曲线
-void CurveShap::Draw(CPaintDC* pdc)
+void CurveShap::Draw(CDC* pdc)
 {
 	if (!pdc) return;
 	if (samplesInt.empty()) UpdateSamples();
@@ -1152,7 +1152,7 @@ bool CurveShap::IsSelected(CPoint point)
 	return false;
 }
 
-void CurveShap::DrawSelection(CPaintDC* pdc)
+void CurveShap::DrawSelection(CDC* pdc)
 {
 	if (!Selected || !pdc) return;
 	if (samplesInt.empty()) UpdateSamples();
@@ -1239,7 +1239,7 @@ PolylineShap::PolylineShap(const std::vector<CPoint>& points)
 	UpdateIntPoints();
 }
 
-void PolylineShap::Draw(CPaintDC* pdc)
+void PolylineShap::Draw(CDC* pdc)
 {
 	if (!pdc || ptsInt.empty()) return;
 	auto it = ptsInt.begin();
@@ -1265,7 +1265,7 @@ bool PolylineShap::IsSelected(CPoint point)
 	return false;
 }
 
-void PolylineShap::DrawSelection(CPaintDC* pdc)
+void PolylineShap::DrawSelection(CDC* pdc)
 {
 	if (!Selected || !pdc || ptsInt.empty()) return;
 	CPen dashPen(PS_DASH, 1, RGB(0, 0, 0));
@@ -1370,7 +1370,7 @@ LineShap* LineShap::CreatePerpendicularAt(CPoint pointOnOrNearLine, double halfL
 	return new LineShap(a, b);
 }
 
-void LineShap::Draw_b(CPaintDC* pdc)
+void LineShap::Draw_b(CDC* pdc)
 {
 	// 为简洁复用原算法结构，添加粗线绘制辅助 lambda
 	if (!pdc) return;
@@ -1466,7 +1466,7 @@ void LineShap::Draw_b(CPaintDC* pdc)
 	}
 }
 
-void LineShap::Draw_B(CPaintDC* pdc)
+void LineShap::Draw_B(CDC* pdc)
 {
 	if (!pdc) return;
 	auto PlotThickPixel = [&](int cx, int cy, int stepIndex)
@@ -1971,7 +1971,7 @@ std::vector<CPoint> ShapController::ComputeAllIntersections() const
 }
 
 // 在屏幕左上角绘制交点列表
-void ShapController::DrawIntersections(CPaintDC* pdc) const
+void ShapController::DrawIntersections(CDC* pdc) const
 {
 	if (!pdc) return;
 	auto pts = ComputeAllIntersections();
