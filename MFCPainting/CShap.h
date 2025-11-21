@@ -107,7 +107,7 @@ public:
 	// Í¨¹ý CShap ¼Ì³Ð
 	void Scale(double factor, CPoint center) override;
 	void GetCenterAndRadius(CPoint& centerOut, double& radiusOut);
-	void ShowCenter(CPaintDC* pdc);
+	void ShowCenter(CDC* pdc);
 
 	LineShap* CreateTangentAt(CPoint pointOnOrNearCircle, double halfLength = 100.0);
 	void SetLineWidth(int w) { lineWidth = max(1, w); }

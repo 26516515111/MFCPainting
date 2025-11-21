@@ -1580,7 +1580,7 @@ void CircleShap::GetCenterAndRadius(CPoint& centerOut, double& radiusOut)
 	}
 }
 
-void CircleShap::ShowCenter(CPaintDC* pdc)
+void CircleShap::ShowCenter(CDC* pdc)
 {
 	if (!pdc) return;
 

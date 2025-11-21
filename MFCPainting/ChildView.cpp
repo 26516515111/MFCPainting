@@ -133,72 +133,81 @@ void CChildView::OnPaint()
 	//	}
 	//	DrawDot(dc);
 	//}
-	CPaintDC dc(this);
+	//CPaintDC dc(this);
 
-	// 1. 绘制持久画布作为背景
+	CPaintDC dc(this); // 用于最终绘制到屏幕的DC
+
+	// 1. 准备一个临时的内存DC用于双缓冲
+	CRect rc;
+	GetClientRect(&rc);
+	CDC memDC;
+	memDC.CreateCompatibleDC(&dc);
+	CBitmap bufferBitmap;
+	bufferBitmap.CreateCompatibleBitmap(&dc, rc.Width(), rc.Height());
+	CBitmap* pOldBitmap = memDC.SelectObject(&bufferBitmap);
+
+	// 2. 绘制背景：将持久画布绘制到内存DC上
 	if (!m_canvasImage.IsNull()) {
-		m_canvasImage.Draw(dc.m_hDC, 0, 0);
+		m_canvasImage.Draw(memDC.GetSafeHdc(), 0, 0);
 	}
 	else {
-		// 如果画布因故为空，则填充白色背景
-		CRect rc;
-		GetClientRect(&rc);
-		dc.FillSolidRect(&rc, RGB(255, 255, 255));
+		memDC.FillSolidRect(&rc, RGB(255, 255, 255));
 	}
 
-	// 若存在填充后的叠加位图，优先绘制并返回
+	// 3. 如果有填充预览，则绘制预览并直接显示
 	if (m_hasFillImage && !m_fillImage.IsNull()) {
-		m_fillImage.Draw(dc.m_hDC, 0, 0);
+		m_fillImage.Draw(memDC.GetSafeHdc(), 0, 0);
+		dc.BitBlt(0, 0, rc.Width(), rc.Height(), &memDC, 0, 0, SRCCOPY);
+		memDC.SelectObject(pOldBitmap);
 		return;
 	}
 
-	if (m_showBitmap && !m_bitmapImage.IsNull()) {
-		m_bitmapImage.Draw(dc.m_hDC, 0, 0);
-		return;
-	}
-
-	// 仅用 D2D 绘制直线与圆
-	if (m_dx2d.IsReady() && m_dx2d.BeginDraw()) {
-		m_dx2d.Clear(D2D1::ColorF(D2D1::ColorF::White));
-		for (auto* shp : Shaps) {
-			if (auto ln = dynamic_cast<LineShap*>(shp)) ln->DrawD2D(m_dx2d);
-			else if (auto cir = dynamic_cast<CircleShap*>(shp)) cir->DrawD2D(m_dx2d);
-		}
-		for (auto* shp : Shaps) {
-			if (auto ln = dynamic_cast<LineShap*>(shp)) ln->DrawSelectionD2D(m_dx2d);
-			else if (auto cir = dynamic_cast<CircleShap*>(shp)) cir->DrawSelectionD2D(m_dx2d);
-		}
-		m_dx2d.EndDraw();
-	}
-
-	// 其它图形直接用 GDI 绘制
+	// 4. 在内存DC上绘制所有活动的矢量图形
+	// GDI 图形
 	for (auto* shp : Shaps) {
 		if (!dynamic_cast<LineShap*>(shp) && !dynamic_cast<CircleShap*>(shp)) {
-			shp->Draw(&dc);              // 这里仍传 CPaintDC*，保持兼容
+			shp->Draw(&memDC);
 		}
 	}
 	for (auto* shp : Shaps) {
 		if (shp->Selected &&
 			!dynamic_cast<LineShap*>(shp) &&
 			!dynamic_cast<CircleShap*>(shp)) {
-			shp->DrawSelection(&dc);
+			shp->DrawSelection(&memDC);
 		}
 	}
 
-	// 辅助点 / 交点 / 圆心
+	// D2D 图形 (也需要绘制到内存DC)
+	// 为了简化，我们继续使用GDI的Draw方法来绘制D2D图形到内存DC
+	for (auto* shp : Shaps) {
+		if (auto ln = dynamic_cast<LineShap*>(shp)) {
+			ln->Draw(&memDC);
+			ln->DrawSelection(&memDC);
+		}
+		else if (auto cir = dynamic_cast<CircleShap*>(shp)) {
+			cir->Draw(&memDC);
+			cir->DrawSelection(&memDC);
+		}
+	}
+
+	// 5. 在内存DC上绘制辅助点等
 	if (!IsSelected) {
 		if (!AbleShapes.empty()) {
 			ShapController* SC = new ShapController(AbleShapes);
-			SC->DrawIntersections(&dc);
+			SC->DrawIntersections(&memDC);
 			AbleShapes.clear();
 			delete SC;
 		}
 		if (targetShape) {
-			targetShape->ShowCenter(&dc);
+			targetShape->ShowCenter(&memDC);
 			targetShape = nullptr;
 		}
-		DrawDot(dc); // 现在能正确显示辅助点
+		DrawDot(memDC);
 	}
+
+	// 6. 将内存DC的内容一次性绘制到屏幕上
+	dc.BitBlt(0, 0, rc.Width(), rc.Height(), &memDC, 0, 0, SRCCOPY);
+	memDC.SelectObject(pOldBitmap);
 }
 
 bool CChildView::StateCheck()
