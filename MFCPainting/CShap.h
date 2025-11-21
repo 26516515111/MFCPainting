@@ -263,28 +263,21 @@ public:
 // -------- 新增：三次贝塞尔曲线 CurveShap --------
 class CurveShap : public CShap {
 private:
-	// 控制点（双精度以避免缩放精度丢失）
-	double x0, y0; // 起点
-	double x1, y1; // 控制点1
-	double x2, y2; // 控制点2
-	double x3, y3; // 终点
+	// 控制点列表（双精度以避免精度丢失）
+	std::vector<double> xs, ys;
 
 	// 采样点（用于绘制与命中检测），整数缓存
 	std::vector<CPoint> samplesInt;
 
-	// 采样精度（段数）
-	int sampleSegments = 40;
-
-	// 计算 t 处贝塞尔点（double）
-	void GetPointOnBezier(double t, double& outx, double& outy) const;
+	// 缓存的整数控制点
+	std::vector<CPoint> ptsInt;
 
 	// 重新采样（在变换后调用）
 	void UpdateSamples();
 
 public:
-	// 构造：四个控制点
-	CurveShap(CPoint p0, CPoint p1, CPoint p2, CPoint p3);
-
+	// 构造：传入 n+1 个控制点以定义一条 n 次贝塞尔曲线
+	CurveShap(const std::vector<CPoint>& points);
 	// 通过 CShap 继承
 	void Draw(CDC* pdc) override;
 	bool IsSelected(CPoint point) override;
@@ -298,7 +291,9 @@ public:
 
 	// 可选销毁
 	void Destroy() override {}
-	const std::vector<CPoint>& GetSamplesInt();
+	const std::vector<CPoint>& GetIntPoints() const { return ptsInt; }
+	const std::vector<CPoint>& GetSampledPoints() const;
+
 
 };
 

@@ -142,6 +142,7 @@ private:
 //求交点
 #pragma region Intersection
 	bool IsInter = false;
+	bool Isfinish = false;
 	std::vector<CShap*> AbleShapes;
 #pragma endregion
 

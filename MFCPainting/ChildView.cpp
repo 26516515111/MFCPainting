@@ -192,7 +192,7 @@ void CChildView::OnPaint()
 
 	// 5. 在内存DC上绘制辅助点等
 	if (!IsSelected) {
-		if (!AbleShapes.empty()) {
+		if (!AbleShapes.empty()&&Isfinish) {
 			ShapController* SC = new ShapController(AbleShapes);
 			SC->DrawIntersections(&memDC);
 			AbleShapes.clear();
@@ -335,17 +335,8 @@ void CChildView::DrawPara(CPoint& point)
 }
 void CChildView::DrawCur(CPoint& point)
 {
-	if (IsCur && points.size() < CurNum) {
+	if (IsCur) {
 		points.push_back(point);
-	}
-	// 达到两点，保存线段，清空临时点集
-	if (IsCur && points.size() == CurNum)
-	{
-
-		CurveShap* newadd = new CurveShap(points[0], points[1], points[2], points[3]);
-		Shaps.push_back(newadd);
-		IsCur = false;
-		points.clear();
 	}
 }
 void CChildView::DrawPoly(CPoint& point)
@@ -792,6 +783,16 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 			for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
 				Shaps[i]->Selected = false;
 			}
+			Isfinish = true;
+			//AbleShapes.clear(); // 在此处清除
+		}
+		// 达到两点，保存线段，清空临时点集
+		if (IsCur&&points.size()>=2)
+		{
+			CurveShap* newadd = new CurveShap(points);
+			Shaps.push_back(newadd);
+			IsCur = false;
+			points.clear();
 		}
 	    Invalidate(); // 触发重绘
 		return;
@@ -1040,6 +1041,7 @@ BOOL CChildView::OnEraseBkgnd(CDC* pDC)
 #pragma region Filed
 void CChildView::ResetAllModes()
 {
+	Isfinish = false;
 	IsDrawLine = false;
 	IsCircle = false;
 	IsSelected = false;

@@ -6,6 +6,10 @@
 #include <string>
 #include <algorithm>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 
 
 // 通用像素样式判断辅助（内部静态）
@@ -1067,53 +1071,83 @@ void ParallelogramShap::Scale(double factor, CPoint center)
 
 
 
-// 计算贝塞尔曲线 t 点
-void CurveShap::GetPointOnBezier(double t, double& outx, double& outy) const
-{
-	// 三次贝塞尔公式
-	double u = 1.0 - t;
-	double b0 = u * u * u;
-	double b1 = 3.0 * u * u * t;
-	double b2 = 3.0 * u * t * t;
-	double b3 = t * t * t;
-	outx = b0 * x0 + b1 * x1 + b2 * x2 + b3 * x3;
-	outy = b0 * y0 + b1 * y1 + b2 * y2 + b3 * y3;
+
+// 辅助函数：计算二项式系数 C(n, k)
+long long BinomialCoeff(int n, int k) {
+	if (k < 0 || k > n) {
+		return 0;
+	}
+	if (k == 0 || k == n) {
+		return 1;
+	}
+	if (k > n / 2) {
+		k = n - k;
+	}
+	long long res = 1;
+	for (int i = 1; i <= k; ++i) {
+		res = res * (n - i + 1) / i;
+	}
+	return res;
 }
 
+// 计算贝塞尔曲线 t 点
 void CurveShap::UpdateSamples()
 {
+	ptsInt.clear();
 	samplesInt.clear();
-	if (sampleSegments < 1) sampleSegments = 1;
-	samplesInt.reserve(sampleSegments + 1);
-	for (int i = 0; i <= sampleSegments; ++i) {
-		double t = static_cast<double>(i) / static_cast<double>(sampleSegments);
-		double sx, sy;
-		GetPointOnBezier(t, sx, sy);
-		samplesInt.emplace_back(static_cast<int>(std::round(sx)), static_cast<int>(std::round(sy)));
+
+	for (size_t i = 0; i < xs.size(); ++i) {
+		ptsInt.emplace_back(static_cast<int>(round(xs[i])), static_cast<int>(round(ys[i])));
+	}
+
+	int n = static_cast<int>(xs.size()) - 1; // 贝塞尔曲线的次数
+	if (n < 1) return; // 至少需要2个点（1次贝塞尔，即直线）
+
+	int segments = 100; // 采样精度
+	for (int j = 0; j <= segments; ++j) {
+		double t = static_cast<double>(j) / segments;
+		double sum_x = 0.0;
+		double sum_y = 0.0;
+
+		for (int i = 0; i <= n; ++i) {
+			double bernstein_poly = BinomialCoeff(n, i) * pow(1.0 - t, n - i) * pow(t, i);
+			sum_x += bernstein_poly * xs[i];
+			sum_y += bernstein_poly * ys[i];
+		}
+
+		CPoint currentSample(static_cast<int>(round(sum_x)), static_cast<int>(round(sum_y)));
+		if (samplesInt.empty() || samplesInt.back() != currentSample) {
+			samplesInt.push_back(currentSample);
+		}
 	}
 }
 
+
+
 // 构造
-CurveShap::CurveShap(CPoint p0, CPoint p1, CPoint p2, CPoint p3)
+CurveShap::CurveShap(const std::vector<CPoint>& points)
 {
-	x0 = static_cast<double>(p0.x); y0 = static_cast<double>(p0.y);
-	x1 = static_cast<double>(p1.x); y1 = static_cast<double>(p1.y);
-	x2 = static_cast<double>(p2.x); y2 = static_cast<double>(p2.y);
-	x3 = static_cast<double>(p3.x); y3 = static_cast<double>(p3.y);
+	for (const auto& p : points) {
+		xs.push_back(static_cast<double>(p.x));
+		ys.push_back(static_cast<double>(p.y));
+	}
 	UpdateSamples();
 }
 
 // 绘制：用采样点绘制折线近似曲线
 void CurveShap::Draw(CDC* pdc)
 {
-	if (!pdc) return;
-	if (samplesInt.empty()) UpdateSamples();
-	// 绘制为折线
-	auto it = samplesInt.begin();
-	if (it == samplesInt.end()) return;
-	pdc->MoveTo(*it);
-	for (++it; it != samplesInt.end(); ++it) {
-		pdc->LineTo(*it);
+	if (samplesInt.size() < 2) {
+		// 如果只有一个采样点，画一个点
+		if (!samplesInt.empty()) {
+			pdc->SetPixel(samplesInt[0], RGB(0, 0, 0));
+		}
+		return;
+	}
+
+	pdc->MoveTo(samplesInt[0]);
+	for (size_t i = 1; i < samplesInt.size(); ++i) {
+		pdc->LineTo(samplesInt[i]);
 	}
 }
 
@@ -1138,16 +1172,17 @@ static double PointSegmentDistDoubleLocal(double px, double py, double ax, doubl
 
 bool CurveShap::IsSelected(CPoint point)
 {
-	const double tolerance = 5.0;
-	if (samplesInt.empty()) UpdateSamples();
-	// 逐段检测
-	for (size_t i = 0; i + 1 < samplesInt.size(); ++i) {
-		double ax = static_cast<double>(samplesInt[i].x);
-		double ay = static_cast<double>(samplesInt[i].y);
-		double bx = static_cast<double>(samplesInt[i + 1].x);
-		double by = static_cast<double>(samplesInt[i + 1].y);
-		double d = PointSegmentDistDoubleLocal(static_cast<double>(point.x), static_cast<double>(point.y), ax, ay, bx, by);
-		if (d <= tolerance) return true;
+	// 检查是否靠近曲线上的采样点
+	for (const auto& p : samplesInt) {
+		if (abs(p.x - point.x) < 5 && abs(p.y - point.y) < 5) {
+			return true;
+		}
+	}
+	// 检查是否靠近控制点
+	for (const auto& p : ptsInt) {
+		if (abs(p.x - point.x) < 5 && abs(p.y - point.y) < 5) {
+			return true;
+		}
 	}
 	return false;
 }
@@ -1155,61 +1190,89 @@ bool CurveShap::IsSelected(CPoint point)
 void CurveShap::DrawSelection(CDC* pdc)
 {
 	if (!Selected || !pdc) return;
-	if (samplesInt.empty()) UpdateSamples();
+
+	// 若采样点不足，用虚线笔标记单点
+	if (samplesInt.size() < 2) {
+		if (!samplesInt.empty()) {
+			CPen dashPen(PS_DASH, 1, RGB(0, 0, 0));
+			CPen* pOldPen = pdc->SelectObject(&dashPen);
+			pdc->SetPixel(samplesInt[0], RGB(0, 0, 0));
+			pdc->SelectObject(pOldPen);
+		}
+		return;
+	}
+
 	CPen dashPen(PS_DASH, 1, RGB(0, 0, 0));
 	CPen* pOldPen = pdc->SelectObject(&dashPen);
-	CBrush* pOldBrush = pdc->SelectObject(CBrush::FromHandle((HBRUSH)GetStockObject(NULL_BRUSH)));
 
 	pdc->MoveTo(samplesInt[0]);
-	for (size_t i = 1; i < samplesInt.size(); ++i) pdc->LineTo(samplesInt[i]);
-	// 结束恢复
-	pdc->SelectObject(pOldBrush);
+	for (size_t i = 1; i < samplesInt.size(); ++i) {
+		pdc->LineTo(samplesInt[i]);
+	}
+
 	pdc->SelectObject(pOldPen);
+
+	// (可选) 如需辅助显示控制点，可取消下面注释：
+	 for (const auto& pt : ptsInt) {
+	     pdc->Rectangle(pt.x - 3, pt.y - 3, pt.x + 4, pt.y + 4);
+	 }
 }
 
 // 变换：移动
 void CurveShap::Move(CSize delta)
 {
-	x0 += delta.cx; y0 += delta.cy;
-	x1 += delta.cx; y1 += delta.cy;
-	x2 += delta.cx; y2 += delta.cy;
-	x3 += delta.cx; y3 += delta.cy;
+	for (size_t i = 0; i < xs.size(); ++i) {
+		xs[i] += delta.cx;
+		ys[i] += delta.cy;
+	}
 	UpdateSamples();
 }
 
 // 变换：旋转（绕中心）
 void CurveShap::Rotate(double degrees)
 {
-	double rad = degrees * (acos(-1.0) / 180.0);
-	CPoint c = GetCenter();
-	double cx = static_cast<double>(c.x);
-	double cy = static_cast<double>(c.y);
-	RotateDoublePoint(x0, y0, cx, cy, rad);
-	RotateDoublePoint(x1, y1, cx, cy, rad);
-	RotateDoublePoint(x2, y2, cx, cy, rad);
-	RotateDoublePoint(x3, y3, cx, cy, rad);
+	CPoint center = GetCenter();
+	double rad = degrees * M_PI / 180.0;
+	double cos_a = cos(rad);
+	double sin_a = sin(rad);
+
+	for (size_t i = 0; i < xs.size(); ++i) {
+		double dx = xs[i] - center.x;
+		double dy = ys[i] - center.y;
+		xs[i] = center.x + dx * cos_a - dy * sin_a;
+		ys[i] = center.y + dx * sin_a + dy * cos_a;
+	}
 	UpdateSamples();
 }
 
 // 缩放（以 center 为中心）
 void CurveShap::Scale(double factor, CPoint center)
 {
-	double cx = static_cast<double>(center.x);
-	double cy = static_cast<double>(center.y);
-	auto scalePt = [&](double& x, double& y) {
-		x = cx + (x - cx) * factor;
-		y = cy + (y - cy) * factor;
-		};
-	scalePt(x0, y0); scalePt(x1, y1); scalePt(x2, y2); scalePt(x3, y3);
+	for (size_t i = 0; i < xs.size(); ++i) {
+		xs[i] = center.x + (xs[i] - center.x) * factor;
+		ys[i] = center.y + (ys[i] - center.y) * factor;
+	}
 	UpdateSamples();
 }
 
 // 中心：控制点平均（可根据需要改为曲线几何中心）
 CPoint CurveShap::GetCenter() const
 {
-	double cx = (x0 + x1 + x2 + x3) / 4.0;
-	double cy = (y0 + y1 + y2 + y3) / 4.0;
-	return CPoint(static_cast<int>(std::round(cx)), static_cast<int>(std::round(cy)));
+	if (xs.empty()) return CPoint(0, 0);
+	double sum_x = 0, sum_y = 0;
+	for (size_t i = 0; i < xs.size(); ++i) {
+		sum_x += xs[i];
+		sum_y += ys[i];
+	}
+	return CPoint(static_cast<int>(round(sum_x / xs.size())), static_cast<int>(round(sum_y / xs.size())));
+}
+
+const std::vector<CPoint>& CurveShap::GetSampledPoints() const
+{
+	// const_cast 是为了在 const 方法中调用非 const 的 UpdateSamples
+	// 这是一个设计上的权衡，允许外部以 const 方式获取最新的采样点
+	const_cast<CurveShap*>(this)->UpdateSamples();
+	return samplesInt;
 }
 
 
@@ -1717,12 +1780,6 @@ void ParallelogramShap::GetIntPoints(CPoint& a, CPoint& b, CPoint& c, CPoint& d)
 	a = p1Int; b = p2Int; c = p3Int; d = p4Int;
 }
 
-// CurveShap
-const std::vector<CPoint>& CurveShap::GetSamplesInt()
-{
-	UpdateSamples();
-	return samplesInt;
-}
 
 // PolylineShap
 const std::vector<CPoint>& PolylineShap::GetIntPoints()
@@ -1904,9 +1961,12 @@ static void ExtractSegmentsOrCircle(CShap* s,
 	}
 	// CurveShap -> 使用采样点近似
 	if (auto cs = dynamic_cast<CurveShap*>(s)) {
-		auto samp = cs->GetSamplesInt();
+		// 直接使用 CurveShap 内部的采样点，确保它们是最新的
+		const auto& samp = cs->GetSampledPoints();
 		if (samp.size() >= 2) {
-			for (size_t i = 0; i + 1 < samp.size(); ++i) outSegments.push_back({ toD(samp[i]), toD(samp[i + 1]) });
+			for (size_t i = 0; i + 1 < samp.size(); ++i) {
+				outSegments.push_back({ toD(samp[i]), toD(samp[i + 1]) });
+			}
 		}
 		return;
 	}
