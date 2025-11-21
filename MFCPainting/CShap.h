@@ -6,6 +6,7 @@
 #include <d2d1.h>
 #include <d2d1helper.h>
 #include <vector>
+#include "Dx2D.h"
 #pragma comment(lib, "d2d1.lib")
 class CShap
 {
@@ -55,6 +56,11 @@ public:
 	void Draw_b(CPaintDC* pdc);
 	//Bresenham»­Ïß·¨
 	void Draw_B(CPaintDC* pdc);
+
+	void DrawD2D(CDx2D& dx);
+	void DrawSelectionD2D(CDx2D& dx);
+
+
 
 	void SetLineWidth(int w) { lineWidth = max(1, w); }
 	void SetLineStyle(int s) { lineStyle = std::clamp(s, 0, 3); }
@@ -108,6 +114,9 @@ public:
 	void SetLineStyle(int s) { lineStyle = std::clamp(s, 0, 3); }
 	int  GetLineWidth() const { return lineWidth; }
 	int  GetLineStyle() const { return lineStyle; }
+
+	void DrawD2D(CDx2D& dx);
+	void DrawSelectionD2D(CDx2D& dx);
 };
 
 class RectShap :public CShap {

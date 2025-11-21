@@ -1528,6 +1528,41 @@ void LineShap::Draw_B(CPaintDC* pdc)
 
 }
 
+void LineShap::DrawD2D(CDx2D& dx)
+{
+	CPoint a = startPoint, b = endPoint;
+	switch (DrawMethod) {
+	case 1: // 中点法
+		dx.DrawLineMidpoint(a, b,
+			(float)lineWidth,
+			lineStyle,
+			D2D1::ColorF(D2D1::ColorF::Black));
+		break;
+	case 2: // Bresenham
+		dx.DrawLineBresenham(a, b,
+			(float)lineWidth,
+			lineStyle,
+			D2D1::ColorF(D2D1::ColorF::Black));
+		break;
+	default: // 直接
+		dx.DrawLineDirect(a, b,
+			(float)lineWidth,
+			lineStyle,
+			D2D1::ColorF(D2D1::ColorF::Black));
+		break;
+	}
+}
+
+void LineShap::DrawSelectionD2D(CDx2D& dx)
+{
+	if (!Selected) return;
+	// 使用虚线样式 (style=1)，线宽略加 1 方便区分
+	dx.DrawLineDirect(startPoint, endPoint,
+		(float)max(1, lineWidth + 1),
+		1,
+		D2D1::ColorF(D2D1::ColorF::Red)); // 改为红色高亮，
+}
+
 // CircleShap
 void CircleShap::GetCenterAndRadius(CPoint& centerOut, double& radiusOut)
 {
@@ -1627,6 +1662,31 @@ LineShap* CircleShap::CreateTangentAt(CPoint pointOnOrNearCircle, double halfLen
 
 	// 返回新创建的 LineShap（调用者负责释放或将其加入管理容器）
 	return new LineShap(p1, p2);
+}
+
+void CircleShap::DrawD2D(CDx2D& dx)
+{
+	CPoint c; double rr = 0.0;
+	GetCenterAndRadius(c, rr);
+	int r = (int)std::round(rr);
+	if (r <= 0) return;
+	// DrawMethod: 0=Direct2D,1=中点,2=Bresenham
+	dx.DrawCircleSmart(c, r,
+		(float)lineWidth,
+		lineStyle,
+		DrawMethod,
+		D2D1::ColorF(D2D1::ColorF::Black));
+}
+
+void CircleShap::DrawSelectionD2D(CDx2D& dx)
+{
+	if (!Selected) return;
+	CPoint c; double rr = 0.0;
+	GetCenterAndRadius(c, rr);
+	dx.DrawCircleDirect(c, (float)rr,
+		(float)max(1, lineWidth + 1),
+		1,
+		D2D1::ColorF(D2D1::ColorF::Red));
 }
 
 // RectShap

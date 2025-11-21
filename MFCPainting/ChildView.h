@@ -1,5 +1,4 @@
-﻿
-// ChildView.h: CChildView 类的接口
+﻿// ChildView.h: CChildView 类的接口
 //
 
 
@@ -9,6 +8,7 @@
 #include<cmath>
 #include "CShap.h"
 #include <atlimage.h> 
+#include "Dx2D.h"
 
 // CChildView 窗口
 
@@ -35,7 +35,8 @@ public:
 protected:
 	afx_msg void OnPaint();
 	bool StateCheck();
-	void DrawDot(CPaintDC& dc);
+	/*void DrawDot(CPaintDC& dc);*/
+	void DrawDot(CDC& dc);
 	DECLARE_MESSAGE_MAP()
 public:
 	afx_msg void OnLineDraw();
@@ -68,15 +69,11 @@ private:
 	bool   m_showBitmap = false;
 
 	// D2D资源
-	ID2D1Factory* m_pD2DFactory;
-	ID2D1HwndRenderTarget* m_pRenderTarget;
-	ID2D1SolidColorBrush* m_pBlackBrush;
-	ID2D1SolidColorBrush* m_pRedBrush;
-	ID2D1SolidColorBrush* m_pSelectionBrush;
-
-	BOOL InitializeD2D();
-	void CleanupD2D();
-	void ResizeD2D();
+	ID2D1Factory* m_pD2DFactory = nullptr;
+	ID2D1HwndRenderTarget* m_pRenderTarget = nullptr;
+	ID2D1SolidColorBrush* m_pBlackBrush = nullptr;
+	ID2D1SolidColorBrush* m_pRedBrush = nullptr;
+	ID2D1SolidColorBrush* m_pSelectionBrush = nullptr;
 
 
 #pragma region Line
@@ -169,13 +166,6 @@ public:
 	afx_msg void OnDelete();
 
 
-	// 提供D2D资源访问
-	ID2D1RenderTarget* GetD2DRenderTarget() { return m_pRenderTarget; }
-	ID2D1SolidColorBrush* GetBlackBrush() { return m_pBlackBrush; }
-	ID2D1SolidColorBrush* GetRedBrush() { return m_pRedBrush; }
-	
-	
-	ID2D1SolidColorBrush* GetSelectionBrush() { return m_pSelectionBrush; }
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 	afx_msg void OnDestroy();
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
@@ -208,5 +198,20 @@ public:
 	afx_msg void OnOnLineShape2();
 	afx_msg void OnOnLineShape3();
 	afx_msg void OnLineWidth8();
+
+private:
+    CDx2D m_dx2d;
+public:
+	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
+
+	// --- 填充模式与像素函数声明（与图元解耦） ---
+private:
+	bool   IsSeedFill = false;
+	bool   IsBarrierFill = false;
+	CImage m_fillImage;       // 填充后的整幅位图（叠加显示）
+	bool   m_hasFillImage = false;
+public:
+	afx_msg void OnSeedFillMode();
+	afx_msg void OnBarrierFillMode();
 };
 

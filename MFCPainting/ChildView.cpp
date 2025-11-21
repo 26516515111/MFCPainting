@@ -16,6 +16,12 @@
 
 CChildView::CChildView()
 {
+	// 保险：显式置空（与头文件内联初始化双保险）
+	m_pD2DFactory = nullptr;
+	m_pRenderTarget = nullptr;
+	m_pBlackBrush = nullptr;
+	m_pRedBrush = nullptr;
+	m_pSelectionBrush = nullptr;
 }
 
 CChildView::~CChildView()
@@ -66,6 +72,9 @@ ON_COMMAND(ID_32801, &CChildView::OnOnLineShape1)
 ON_COMMAND(ID_32802, &CChildView::OnOnLineShape2)
 ON_COMMAND(ID_32803, &CChildView::OnOnLineShape3)
 ON_COMMAND(ID_32798, &CChildView::OnLineWidth8)
+ON_WM_ERASEBKGND()
+ON_COMMAND(ID_32804, &CChildView::OnSeedFillMode)
+ON_COMMAND(ID_32805, &CChildView::OnBarrierFillMode)
 END_MESSAGE_MAP()
 
 // CChildView 消息处理程序
@@ -85,34 +94,89 @@ BOOL CChildView::PreCreateWindow(CREATESTRUCT& cs)
 
 void CChildView::OnPaint() 
 {
-	CPaintDC dc(this); // 用于验证区域
+	//CPaintDC dc(this); // 用于验证区域
 
-	// 若当前处于“位图查看模式”，直接绘制 BMP
+	//// 若当前处于“位图查看模式”，直接绘制 BMP
+	//if (m_showBitmap && !m_bitmapImage.IsNull()) {
+	//	// 将 BMP 贴到(0,0)。如需居中/缩放，可自行计算目标矩形
+	//	m_bitmapImage.Draw(dc.m_hDC, 0, 0);
+	//	return;
+	//}
+
+	//	// 备用：使用原来的GDI绘制
+	//for (const auto& ln : Shaps)
+	//	{
+	//		ln->Draw(&dc);
+	//	}
+	//
+	//if (StateCheck()) {
+	//		for (const auto& shp : Shaps)
+	//		{
+	//			/*shp->ChangeSelected(points[0]);*/
+	//			if (shp->Selected) {
+	//				shp->DrawSelection(&dc);
+	//			}
+	//		}
+	//	}
+	//else if(!IsSelected){
+	//	//绘制交点
+	//	if (!AbleShapes.empty()) {
+	//		// 计算交点
+	//		ShapController* SC = new ShapController(AbleShapes);
+	//		SC->DrawIntersections(&dc);
+	//		AbleShapes.clear();
+	//		delete SC;
+	//	}
+	//	if (targetShape) {
+	//		targetShape->ShowCenter(&dc);
+	//		targetShape = NULL;
+	//	}
+	//	DrawDot(dc);
+	//}
+	CPaintDC dc(this);
+
+	// 若存在填充后的叠加位图，优先绘制并返回
+	if (m_hasFillImage && !m_fillImage.IsNull()) {
+		m_fillImage.Draw(dc.m_hDC, 0, 0);
+		return;
+	}
+
 	if (m_showBitmap && !m_bitmapImage.IsNull()) {
-		// 将 BMP 贴到(0,0)。如需居中/缩放，可自行计算目标矩形
 		m_bitmapImage.Draw(dc.m_hDC, 0, 0);
 		return;
 	}
 
-		// 备用：使用原来的GDI绘制
-	for (const auto& ln : Shaps)
-		{
-			ln->Draw(&dc);
+	// 仅用 D2D 绘制直线与圆
+	if (m_dx2d.IsReady() && m_dx2d.BeginDraw()) {
+		m_dx2d.Clear(D2D1::ColorF(D2D1::ColorF::White));
+		for (auto* shp : Shaps) {
+			if (auto ln = dynamic_cast<LineShap*>(shp)) ln->DrawD2D(m_dx2d);
+			else if (auto cir = dynamic_cast<CircleShap*>(shp)) cir->DrawD2D(m_dx2d);
 		}
-	
-	if (StateCheck()) {
-			for (const auto& shp : Shaps)
-			{
-				/*shp->ChangeSelected(points[0]);*/
-				if (shp->Selected) {
-					shp->DrawSelection(&dc);
-				}
-			}
+		for (auto* shp : Shaps) {
+			if (auto ln = dynamic_cast<LineShap*>(shp)) ln->DrawSelectionD2D(m_dx2d);
+			else if (auto cir = dynamic_cast<CircleShap*>(shp)) cir->DrawSelectionD2D(m_dx2d);
 		}
-	else if(!IsSelected){
-		//绘制交点
+		m_dx2d.EndDraw();
+	}
+
+	// 其它图形直接用 GDI 绘制
+	for (auto* shp : Shaps) {
+		if (!dynamic_cast<LineShap*>(shp) && !dynamic_cast<CircleShap*>(shp)) {
+			shp->Draw(&dc);              // 这里仍传 CPaintDC*，保持兼容
+		}
+	}
+	for (auto* shp : Shaps) {
+		if (shp->Selected &&
+			!dynamic_cast<LineShap*>(shp) &&
+			!dynamic_cast<CircleShap*>(shp)) {
+			shp->DrawSelection(&dc);
+		}
+	}
+
+	// 辅助点 / 交点 / 圆心
+	if (!IsSelected) {
 		if (!AbleShapes.empty()) {
-			// 计算交点
 			ShapController* SC = new ShapController(AbleShapes);
 			SC->DrawIntersections(&dc);
 			AbleShapes.clear();
@@ -120,9 +184,9 @@ void CChildView::OnPaint()
 		}
 		if (targetShape) {
 			targetShape->ShowCenter(&dc);
-			targetShape = NULL;
+			targetShape = nullptr;
 		}
-		DrawDot(dc);
+		DrawDot(dc); // 现在能正确显示辅助点
 	}
 }
 
@@ -163,14 +227,24 @@ void CChildView::DrawCircle(CPoint& point)
 		DrawCirclesMode = 0;
 	}
 }
-void CChildView::DrawDot(CPaintDC& dc)
+//void CChildView::DrawDot(CPaintDC& dc)
+//{
+//	// 绘制已保存的点（实心小圆）
+//	CBrush brush(RGB(0, 0, 0));
+//	CBrush* pOldBrush = dc.SelectObject(&brush);
+//	const int r = 3; // 半径
+//	for (const auto& pt : points)
+//	{
+//		dc.Ellipse(pt.x - r, pt.y - r, pt.x + r + 1, pt.y + r + 1);
+//	}
+//	dc.SelectObject(pOldBrush);
+//}
+void CChildView::DrawDot(CDC& dc)
 {
-	// 绘制已保存的点（实心小圆）
 	CBrush brush(RGB(0, 0, 0));
 	CBrush* pOldBrush = dc.SelectObject(&brush);
-	const int r = 3; // 半径
-	for (const auto& pt : points)
-	{
+	const int r = 3;
+	for (const auto& pt : points) {
 		dc.Ellipse(pt.x - r, pt.y - r, pt.x + r + 1, pt.y + r + 1);
 	}
 	dc.SelectObject(pOldBrush);
@@ -314,81 +388,26 @@ void CChildView::CheckSelectedPoint(CPoint& point)
 	}
 }
 
-#pragma region D2D
-BOOL CChildView::InitializeD2D()
-{
-	// 创建D2D工厂
-	HRESULT hr = D2D1CreateFactory(
-		D2D1_FACTORY_TYPE_SINGLE_THREADED,
-		&m_pD2DFactory
-	);
-
-	if (FAILED(hr)) return FALSE;
-
-	RECT rc;
-	GetClientRect(&rc);
-
-	D2D1_SIZE_U size = D2D1::SizeU(rc.right, rc.bottom);
-
-	// 创建渲染目标
-	hr = m_pD2DFactory->CreateHwndRenderTarget(
-		D2D1::RenderTargetProperties(),
-		D2D1::HwndRenderTargetProperties(GetSafeHwnd(), size),
-		&m_pRenderTarget
-	);
-
-	if (FAILED(hr)) return FALSE;
-
-	// 创建画刷
-	hr = m_pRenderTarget->CreateSolidColorBrush(
-		D2D1::ColorF(D2D1::ColorF::Black),
-		&m_pBlackBrush
-	);
-
-	if (FAILED(hr)) return FALSE;
-
-	hr = m_pRenderTarget->CreateSolidColorBrush(
-		D2D1::ColorF(D2D1::ColorF::Red),
-		&m_pRedBrush
-	);
-
-	if (FAILED(hr)) return FALSE;
-
-	hr = m_pRenderTarget->CreateSolidColorBrush(
-		D2D1::ColorF(D2D1::ColorF::Blue, 0.5f),
-		&m_pSelectionBrush
-	);
-
-	return SUCCEEDED(hr);
-}
-
-void CChildView::CleanupD2D()
-{
-	if (m_pSelectionBrush) m_pSelectionBrush->Release();
-	if (m_pRedBrush) m_pRedBrush->Release();
-	if (m_pBlackBrush) m_pBlackBrush->Release();
-	if (m_pRenderTarget) m_pRenderTarget->Release();
-	if (m_pD2DFactory) m_pD2DFactory->Release();
-
-	m_pSelectionBrush = nullptr;
-	m_pRedBrush = nullptr;
-	m_pBlackBrush = nullptr;
-	m_pRenderTarget = nullptr;
-	m_pD2DFactory = nullptr;
-}
-
-void CChildView::ResizeD2D()
-{
-	if (m_pRenderTarget)
-	{
-		RECT rc;
-		GetClientRect(&rc);
-		m_pRenderTarget->Resize(D2D1::SizeU(rc.right, rc.bottom));
-	}
-}
-#pragma endregion
 
 #pragma region onMenu
+
+void CChildView::OnSeedFillMode()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsSeedFill = true;
+	IsBarrierFill = false;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
+
+void CChildView::OnBarrierFillMode()
+{
+	// TODO: 在此添加命令处理程序代码
+	IsBarrierFill = true;
+	IsSeedFill = false;
+	IsSelected = false;
+	IsSelectedSave = false;
+}
 //绘制直线
 void CChildView::OnLineDraw()
 {
@@ -637,13 +656,14 @@ void CChildView::OnOnLineShape3()
 void CChildView::OnSize(UINT nType, int cx, int cy)
 {
 	CWnd::OnSize(nType, cx, cy);
-	ResizeD2D();
-	// TODO: 在此处添加消息处理程序代码
+	if (cx > 0 && cy > 0) {
+		m_dx2d.Resize((UINT)cx, (UINT)cy);
+	}
 }
 
 void CChildView::OnDestroy()
 {
-	CleanupD2D();
+	m_dx2d.Cleanup();
 	CWnd::OnDestroy();
 
 	// TODO: 在此处添加消息处理程序代码
@@ -655,7 +675,7 @@ int CChildView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		return -1;
 
 	// TODO:  在此添加您专用的创建代码
-	InitializeD2D();
+	m_dx2d.Initialize(this->m_hWnd);
 	return 0;
 }
 
@@ -938,5 +958,19 @@ void CChildView::ApplyStyleToSelection(int s)
 
 
 
+
+
+
+
+BOOL CChildView::OnEraseBkgnd(CDC* pDC)
+{
+	// TODO: 在此添加消息处理程序代码和/或调用默认值
+	return TRUE;
+	/*return CWnd::OnEraseBkgnd(pDC);*/
+}
+
+#pragma region Filed
+
+#pragma endregion
 
 

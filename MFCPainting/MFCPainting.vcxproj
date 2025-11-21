@@ -186,6 +186,7 @@
   <ItemGroup>
     <ClInclude Include="ChildView.h" />
     <ClInclude Include="CShap.h" />
+    <ClInclude Include="Dx2D.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="MFCPainting.h" />
@@ -196,6 +197,7 @@
   <ItemGroup>
     <ClCompile Include="ChildView.cpp" />
     <ClCompile Include="CShap.cpp" />
+    <ClCompile Include="Dx2D.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="MFCPainting.cpp" />
     <ClCompile Include="pch.cpp">

@@ -39,6 +39,9 @@
     <ClInclude Include="CShap.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Dx2D.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="MFCPainting.cpp">
@@ -54,6 +57,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="CShap.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Dx2D.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
