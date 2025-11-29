@@ -260,7 +260,6 @@ public:
 	void GetIntPoints(CPoint& a, CPoint& b, CPoint& c, CPoint& d);
 
 };
-// -------- 新增：三次贝塞尔曲线 CurveShap --------
 class CurveShap : public CShap {
 private:
 	// 控制点列表（双精度以避免精度丢失）

@@ -1142,7 +1142,7 @@ void CChildView::PerformFill(CPoint seedPoint)
 		SeedFill(m_fillImage, seedPoint, m_fillColor, boundaryColor);
 	}
 	else if (IsBarrierFill) {
-		ScanlineFill(m_fillImage, seedPoint, m_fillColor, boundaryColor);
+		FenceFill(m_fillImage, seedPoint, m_fillColor, boundaryColor);
 	}
 
 	m_fillImage.ReleaseDC();
@@ -1187,8 +1187,9 @@ void CChildView::SeedFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF
 
 }
 
-void CChildView::ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor)
+void CChildView::FenceFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor)
 {
+	
 	if (img.IsNull()) return;
 
 	int width = img.GetWidth();
@@ -1198,6 +1199,9 @@ void CChildView::ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLO
 	if (oldColor == fillColor || oldColor == boundaryColor) {
 		return;
 	}
+
+	// 使用栅栏填充法 - 以种子点的x坐标作为栅栏
+	int fenceX = seed.x;
 
 	std::stack<CPoint> seeds;
 	seeds.push(seed);
@@ -1209,16 +1213,20 @@ void CChildView::ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLO
 		int x = currentSeed.x;
 		int y = currentSeed.y;
 
-		// 找到当前扫描线的左边界
+		// 向左填充直到边界（栅栏左侧）
 		int xLeft = x;
-		while (xLeft >= 0 && img.GetPixel(xLeft, y) != boundaryColor && img.GetPixel(xLeft, y) != fillColor) {
+		while (xLeft >= 0 &&
+			img.GetPixel(xLeft, y) != boundaryColor &&
+			img.GetPixel(xLeft, y) != fillColor) {
 			xLeft--;
 		}
 		xLeft++;
 
-		// 找到当前扫描线的右边界
+		// 向右填充直到边界（栅栏右侧）
 		int xRight = x;
-		while (xRight < width && img.GetPixel(xRight, y) != boundaryColor && img.GetPixel(xRight, y) != fillColor) {
+		while (xRight < width &&
+			img.GetPixel(xRight, y) != boundaryColor &&
+			img.GetPixel(xRight, y) != fillColor) {
 			xRight++;
 		}
 		xRight--;
@@ -1228,25 +1236,63 @@ void CChildView::ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLO
 			img.SetPixel(i, y, fillColor);
 		}
 
-		// 在上方和下方扫描线寻找新的种子点
+		// 在上方和下方扫描线寻找新的种子点 - 关键区别：分区处理
 		for (int i = xLeft; i <= xRight; ++i) {
-			// 上方
-			if (y > 0) {
-				COLORREF colorAbove = img.GetPixel(i, y - 1);
-				if (colorAbove != boundaryColor && colorAbove != fillColor) {
-					seeds.push(CPoint(i, y - 1));
+			// 栅栏左侧的种子点处理
+			if (i < fenceX) {
+				// 上方 - 只在栅栏左侧寻找种子点
+				if (y > 0) {
+					COLORREF colorAbove = img.GetPixel(i, y - 1);
+					if (colorAbove != boundaryColor && colorAbove != fillColor) {
+						seeds.push(CPoint(i, y - 1));
+					}
+				}
+				// 下方 - 只在栅栏左侧寻找种子点
+				if (y < height - 1) {
+					COLORREF colorBelow = img.GetPixel(i, y + 1);
+					if (colorBelow != boundaryColor && colorBelow != fillColor) {
+						seeds.push(CPoint(i, y + 1));
+					}
 				}
 			}
-			// 下方
-			if (y < height - 1) {
-				COLORREF colorBelow = img.GetPixel(i, y + 1);
-				if (colorBelow != boundaryColor && colorBelow != fillColor) {
-					seeds.push(CPoint(i, y + 1));
+			// 栅栏右侧的种子点处理
+			else if (i > fenceX) {
+				// 上方 - 只在栅栏右侧寻找种子点
+				if (y > 0) {
+					COLORREF colorAbove = img.GetPixel(i, y - 1);
+					if (colorAbove != boundaryColor && colorAbove != fillColor) {
+						seeds.push(CPoint(i, y - 1));
+					}
+				}
+				// 下方 - 只在栅栏右侧寻找种子点
+				if (y < height - 1) {
+					COLORREF colorBelow = img.GetPixel(i, y + 1);
+					if (colorBelow != boundaryColor && colorBelow != fillColor) {
+						seeds.push(CPoint(i, y + 1));
+					}
+				}
+			}
+			// 栅栏位置的特殊处理 - 可以同时向两侧扩展
+			else {
+				// 上方
+				if (y > 0) {
+					COLORREF colorAbove = img.GetPixel(i, y - 1);
+					if (colorAbove != boundaryColor && colorAbove != fillColor) {
+						seeds.push(CPoint(i, y - 1));
+					}
+				}
+				// 下方
+				if (y < height - 1) {
+					COLORREF colorBelow = img.GetPixel(i, y + 1);
+					if (colorBelow != boundaryColor && colorBelow != fillColor) {
+						seeds.push(CPoint(i, y + 1));
+					}
 				}
 			}
 		}
 	}
 }
+
 #pragma endregion
 
 

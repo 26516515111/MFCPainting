@@ -220,7 +220,7 @@ private:
 	void FlattenFillToCanvas(); // 新增：将填充结果固化到画布上
 	void PerformFill(CPoint seedPoint);
 	void SeedFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor);
-	void ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor);
+	void FenceFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor);
 public:
 	afx_msg void OnSeedFillMode();
 	afx_msg void OnBarrierFillMode();
