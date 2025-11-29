@@ -43,6 +43,7 @@ protected:
 public:
 	afx_msg void OnLineDraw();
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
+	void DrawPolyGon(CPoint& point);
 	void DrawPoly(CPoint& point);
 	void DrawCur(CPoint& point);
 	void DrawPara(CPoint& point);
@@ -119,6 +120,10 @@ private:
 	bool IsPoly = false;
 #pragma endregion
 
+#pragma region Polygon
+	bool IsPolygon = false;
+#pragma endregion
+
 #pragma region Select
 	bool IsSelected = false;
 	bool IsSelectedSave = false;
@@ -137,6 +142,7 @@ private:
 	CShap* m_pRotated = nullptr; // 当前正在旋转的图元
 	double m_lastRotateAngle = 0.0; // 上一次鼠标角度（弧度）
 	CPoint m_rotateCenter; // 旋转中心（缓存）
+	CPoint FixedRotatePoint = NULL; // 固定旋转点
 #pragma endregion
 
 //求交点
@@ -155,6 +161,14 @@ private:
 #pragma endregion
 #pragma region CircleTangent
 	bool IsCircleTangent = false;
+#pragma endregion
+
+#pragma region Clip
+	bool IsClipMode = false;
+	int m_clipAlgo = 0; // 0: Cohen-Sutherland, 1: Midpoint
+	bool m_isSelectingClipRect = false;
+	CRect m_clipRect;
+	CPoint m_clipStartPoint;
 #pragma endregion
 
 
@@ -220,9 +234,17 @@ private:
 	void FlattenFillToCanvas(); // 新增：将填充结果固化到画布上
 	void PerformFill(CPoint seedPoint);
 	void SeedFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor);
-	void FenceFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor);
+	void ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor);
 public:
 	afx_msg void OnSeedFillMode();
 	afx_msg void OnBarrierFillMode();
+	afx_msg void On32808();
+	afx_msg void On32809();
+	afx_msg void On32810();
+	afx_msg void On32811();
+private:
+	void ClipLinesWithRect(const CRect& rect);
+public:
+	afx_msg void OnPolyGon();
 };
 

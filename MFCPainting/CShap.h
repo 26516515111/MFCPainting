@@ -21,7 +21,7 @@ public:
 	virtual void Rotate(double degrees) = 0;
 	virtual CPoint GetCenter() const = 0;
 	virtual ~CShap() = default;
-
+	CPoint pt;
 	// 新增：缩放图元
 	virtual void Scale(double factor, CPoint center) = 0;
 
@@ -33,6 +33,7 @@ class LineShap :public CShap {
 private:
 	CPoint startPoint;
 	CPoint endPoint;
+
 	int DrawMethod; // 0-中点画线法，1-Bresenham画线法
 	int lineWidth;
 	int lineStyle;
@@ -66,7 +67,9 @@ public:
 	void SetLineStyle(int s) { lineStyle = std::clamp(s, 0, 3); }
 	int  GetLineWidth() const { return lineWidth; }
 	int  GetLineStyle() const { return lineStyle; }
-	
+	//实验4
+	int GetDrawMethod() const { return DrawMethod; }
+
 };
 
 class CircleShap :public CShap {
@@ -260,6 +263,7 @@ public:
 	void GetIntPoints(CPoint& a, CPoint& b, CPoint& c, CPoint& d);
 
 };
+// -------- 新增：三次贝塞尔曲线 CurveShap --------
 class CurveShap : public CShap {
 private:
 	// 控制点列表（双精度以避免精度丢失）
@@ -328,6 +332,41 @@ public:
 	const std::vector<CPoint>& GetIntPoints();
 };
 
+class PolygonShap : public CShap {
+private:
+	// 双精度顶点列表
+	std::vector<double> xs;
+	std::vector<double> ys;
+
+	// 缓存整数顶点用于绘制/交互
+	std::vector<CPoint> ptsInt;
+
+	// 重建整数缓存
+	void UpdateIntPoints();
+
+public:
+	// 构造：传入顶点列表（至少 3 个点）
+	PolygonShap(const std::vector<CPoint>& points);
+
+	// 绘制与交互
+	void Draw(CDC* pdc) override;
+	bool IsSelected(CPoint point) override;
+	void DrawSelection(CDC* pdc) override;
+
+	static bool check(const std::vector<CPoint>& points);
+
+
+	// 变换
+	void Move(CSize delta) override;
+	void Rotate(double degrees) override;
+	void Scale(double factor, CPoint center) override;
+	CPoint GetCenter() const override;
+
+	// 清理
+	void Destroy() override {}
+	const std::vector<CPoint>& GetIntPoints() { return ptsInt; };
+};
+
 class ShapController {
 private: 
 	std::vector<CShap*> shapes;
@@ -341,3 +380,4 @@ public:
 	// 新增：在给定设备上下文的左上角绘制交点列表（从 (2,2) 向下）
 	void DrawIntersections(CDC* pdc) const;
 };
+

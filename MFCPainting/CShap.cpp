@@ -141,7 +141,8 @@ void LineShap::Move(CSize delta)
 void LineShap::Rotate(double degrees)
 {
 	double rad = degrees * (acos(-1.0) / 180.0);
-	CPoint center = GetCenter();
+	//将points中得点取出作为center
+	CPoint center = pt;
 	startPoint = RotatePointAround(startPoint, center, rad);
 	endPoint = RotatePointAround(endPoint, center, rad);
 }
@@ -417,7 +418,17 @@ void CircleShap::Move(CSize delta)
 void CircleShap::Rotate(double degrees)
 {
 	double rad = degrees * (acos(-1.0) / 180.0);
-	rPoint = RotatePointAround(rPoint, centerPoint, rad);
+
+	// 将圆心与半径点绕成员 pt 旋转（只读取一次 pt）
+	// 更新整数与双精度表示，保持内部状态一致
+	centerPoint = RotatePointAround(centerPoint, pt, rad);
+	rPoint = RotatePointAround(rPoint, pt, rad);
+
+	// 同步高精度成员，避免后续缩放/绘制产生误差
+	centerX = static_cast<double>(centerPoint.x);
+	centerY = static_cast<double>(centerPoint.y);
+	rdx = static_cast<double>(rPoint.x - centerPoint.x);
+	rdy = static_cast<double>(rPoint.y - centerPoint.y);
 }
 
 CPoint CircleShap::GetCenter() const
@@ -606,8 +617,21 @@ void DiamondShap::Move(CSize delta)
 	UpdateIntCorners();
 }
 
+
 void DiamondShap::Rotate(double degrees)
 {
+	double rad = degrees * (acos(-1.0) / 180.0);
+
+	// 以成员 pt 为旋转中心：先将中心绕 pt 旋转，再累加角度
+	double dx = centerX - static_cast<double>(pt.x);
+	double dy = centerY - static_cast<double>(pt.y);
+	double cosv = std::cos(rad);
+	double sinv = std::sin(rad);
+	double nx = dx * cosv - dy * sinv;
+	double ny = dx * sinv + dy * cosv;
+	centerX = static_cast<double>(pt.x) + nx;
+	centerY = static_cast<double>(pt.y) + ny;
+
 	angleDeg += degrees;
 	if (angleDeg > 360.0 || angleDeg < -360.0) angleDeg = std::fmod(angleDeg, 360.0);
 	UpdateIntCorners();
@@ -742,13 +766,26 @@ void RectShap::Move(CSize delta)
 	UpdateIntCorners();
 }
 
+
 void RectShap::Rotate(double degrees)
 {
+	// 以成员 pt 为旋转中心：先将中心绕 pt 旋转，再累加内部角度 angleDeg
+	double rad = DegToRad(degrees);
+	double dx = centerX - static_cast<double>(pt.x);
+	double dy = centerY - static_cast<double>(pt.y);
+	double cosv = std::cos(rad);
+	double sinv = std::sin(rad);
+	double nx = dx * cosv - dy * sinv;
+	double ny = dx * sinv + dy * cosv;
+	centerX = static_cast<double>(pt.x) + nx;
+	centerY = static_cast<double>(pt.y) + ny;
+
+	// 更新内部角度并规范化
 	angleDeg += degrees;
-	// 规范化角度（可选）
 	if (angleDeg > 360.0 || angleDeg < -360.0) {
 		angleDeg = std::fmod(angleDeg, 360.0);
 	}
+
 	UpdateIntCorners();
 }
 
@@ -794,6 +831,199 @@ void TriangleShap::UpdateIntPoints()
 	p3Int.x = static_cast<int>(std::round(x3));
 	p3Int.y = static_cast<int>(std::round(y3));
 }
+
+
+void PolygonShap::UpdateIntPoints() {
+	ptsInt.resize(xs.size());
+	for (size_t i = 0; i < xs.size(); ++i) {
+		ptsInt[i].x = static_cast<LONG>(std::lround(xs[i]));
+		ptsInt[i].y = static_cast<LONG>(std::lround(ys[i]));
+	}
+}
+
+PolygonShap::PolygonShap(const std::vector<CPoint>& points)
+{
+	for (const auto& p : points) {
+		xs.push_back(static_cast<double>(p.x));
+		ys.push_back(static_cast<double>(p.y));
+	}
+	UpdateIntPoints();
+}
+
+void PolygonShap::Draw(CDC* pdc)
+{
+	if (ptsInt.size() < 3) return;
+
+	// 创建画笔和画刷
+	CPen pen(PS_SOLID, 1, RGB(0, 0, 0));
+	CBrush brush(RGB(255, 255, 255)); // 白色填充
+
+	CPen* pOldPen = pdc->SelectObject(&pen);
+	CBrush* pOldBrush = pdc->SelectObject(&brush);
+
+	pdc->Polygon(ptsInt.data(), static_cast<int>(ptsInt.size()));
+
+	pdc->SelectObject(pOldBrush);
+	pdc->SelectObject(pOldPen);
+}
+
+bool PolygonShap::IsSelected(CPoint point)
+{
+	if (ptsInt.size() < 3) return false;
+
+	CRgn rgn;
+	if (rgn.CreatePolygonRgn(ptsInt.data(), static_cast<int>(ptsInt.size()), WINDING)) {
+		return rgn.PtInRegion(point);
+	}
+	return false;
+}
+
+void PolygonShap::DrawSelection(CDC* pdc)
+{
+	if (!Selected) return;
+
+	// 绘制每个顶点的控制点
+	CBrush brush(RGB(255, 0, 0)); // 红色画刷用于绘制控制点
+	CBrush* pOldBrush = pdc->SelectObject(&brush);
+
+	// 使用空画笔，因为我们只想填充小方块，不关心边框
+	CPen pen(PS_NULL, 0, (COLORREF)0);
+	CPen* pOldPen = pdc->SelectObject(&pen);
+
+	// 为每个顶点绘制一个红色的小方块作为控制点
+	for (const auto& pt : ptsInt) {
+		pdc->Rectangle(pt.x - 3, pt.y - 3, pt.x + 4, pt.y + 4);
+	}
+
+	// 恢复原来的画刷和画笔
+	pdc->SelectObject(pOldBrush);
+	pdc->SelectObject(pOldPen);
+}
+
+void PolygonShap::Move(CSize delta)
+{
+	for (size_t i = 0; i < xs.size(); ++i) {
+		xs[i] += delta.cx;
+		ys[i] += delta.cy;
+	}
+	UpdateIntPoints();
+}
+
+void PolygonShap::Rotate(double degrees)
+{
+	CPoint center = GetCenter();
+	double rad = degrees * (acos(-1.0) / 180.0);
+	double cosA = cos(rad);
+	double sinA = sin(rad);
+
+	for (size_t i = 0; i < xs.size(); ++i) {
+		double dx = xs[i] - center.x;
+		double dy = ys[i] - center.y;
+		xs[i] = center.x + (dx * cosA - dy * sinA);
+		ys[i] = center.y + (dx * sinA + dy * cosA);
+	}
+	UpdateIntPoints();
+}
+
+void PolygonShap::Scale(double factor, CPoint center)
+{
+	for (size_t i = 0; i < xs.size(); ++i) {
+		xs[i] = center.x + (xs[i] - center.x) * factor;
+		ys[i] = center.y + (ys[i] - center.y) * factor;
+	}
+	UpdateIntPoints();
+}
+
+CPoint PolygonShap::GetCenter() const
+{
+	if (xs.empty()) return CPoint(0, 0);
+	double sumX = 0.0, sumY = 0.0;
+	for (size_t i = 0; i < xs.size(); ++i) {
+		sumX += xs[i];
+		sumY += ys[i];
+	}
+	return CPoint(static_cast<LONG>(std::lround(sumX / xs.size())),
+		static_cast<LONG>(std::lround(sumY / ys.size())));
+}
+
+
+// 辅助函数：检查三个点的方向（共线、顺时针或逆时针）
+static int orientation(CPoint p, CPoint q, CPoint r) {
+	long long val = (long long)(q.y - p.y) * (r.x - q.x) -
+		(long long)(q.x - p.x) * (r.y - q.y);
+
+	if (val == 0) return 0;  // 共线
+	return (val > 0) ? 1 : 2; // 顺时针或逆时针
+}
+
+// 辅助函数：检查点 q 是否在线段 pr 上
+static bool onSegment(CPoint p, CPoint q, CPoint r) {
+	return (q.x <= max(p.x, r.x) && q.x >= min(p.x, r.x) &&
+		q.y <= max(p.y, r.y) && q.y >= min(p.y, r.y));
+}
+
+// 辅助函数：检查线段 'p1q1' 和 'p2q2' 是否相交
+static bool doIntersect(CPoint p1, CPoint q1, CPoint p2, CPoint q2) {
+	// 找到四个方向
+	int o1 = orientation(p1, q1, p2);
+	int o2 = orientation(p1, q1, q2);
+	int o3 = orientation(p2, q2, p1);
+	int o4 = orientation(p2, q2, q1);
+
+	// 一般情况：两条线段相互跨越
+	if (o1 != o2 && o3 != o4)
+		return true;
+
+	// 特殊情况：p1, q1, p2 共线且 p2 在线段 p1q1 上
+	if (o1 == 0 && onSegment(p1, p2, q1)) return true;
+
+	// 特殊情况：p1, q1, q2 共线且 q2 在线段 p1q1 上
+	if (o2 == 0 && onSegment(p1, q2, q1)) return true;
+
+	// 特殊情况：p2, q2, p1 共线且 p1 在线段 p2q2 上
+	if (o3 == 0 && onSegment(p2, p1, q2)) return true;
+
+	// 特殊情况：p2, q2, q1 共线且 q1 在线段 p2q2 上
+	if (o4 == 0 && onSegment(p2, q1, q2)) return true;
+
+	return false; // 不相交
+}
+
+bool PolygonShap::check(const std::vector<CPoint>& points) {
+	int n = static_cast<int>(points.size());
+
+	// 1. 顶点数必须大于等于3，免于讨论
+	if (n < 3) {
+		return true;
+	}
+
+	// 2. 检查所有不相邻的边对是否相交
+	for (int i = 0; i < n; ++i) {
+		CPoint p1 = points[i];
+		CPoint q1 = points[(i + 1) % n];
+
+		// 从 i+1 开始，检查所有后续的边
+		for (int j = i + 1; j < n; ++j) {
+			CPoint p2 = points[j];
+			CPoint q2 = points[(j + 1) % n];
+
+			// 如果两条边是相邻的，则跳过检查
+			if ((i + 1) % n == j || (j + 1) % n == i) {
+				continue;
+			}
+
+			// 如果两条不相邻的边相交，则为非法多边形
+			if (doIntersect(p1, q1, p2, q2)) {
+				return false;
+			}
+		}
+	}
+
+	// 如果没有自交，则是合法的简单多边形
+	return true;
+}
+
+
 
 TriangleShap::TriangleShap(CPoint a, CPoint b, CPoint c)
 {
@@ -908,9 +1138,11 @@ void TriangleShap::Move(CSize delta)
 void TriangleShap::Rotate(double degrees)
 {
 	double rad = degrees * (acos(-1.0) / 180.0);
-	CPoint c = GetCenter();
-	double cx = static_cast<double>(c.x);
-	double cy = static_cast<double>(c.y);
+
+	// 使用类成员 pt 作为旋转中心（调用方需在旋转前设置好 pt）
+	double cx = static_cast<double>(pt.x);
+	double cy = static_cast<double>(pt.y);
+
 	RotateDoublePoint(x1, y1, cx, cy, rad);
 	RotateDoublePoint(x2, y2, cx, cy, rad);
 	RotateDoublePoint(x3, y3, cx, cy, rad);
@@ -1036,13 +1268,16 @@ void ParallelogramShap::Move(CSize delta)
 void ParallelogramShap::Rotate(double degrees)
 {
 	double rad = degrees * (acos(-1.0) / 180.0);
-	CPoint c = GetCenter();
-	double cx = static_cast<double>(c.x);
-	double cy = static_cast<double>(c.y);
+
+	// 使用类成员 pt 作为旋转中心（调用方在旋转前需设置好 pt）
+	double cx = static_cast<double>(pt.x);
+	double cy = static_cast<double>(pt.y);
+
 	RotateDoublePoint(x1, y1, cx, cy, rad);
 	RotateDoublePoint(x2, y2, cx, cy, rad);
 	RotateDoublePoint(x3, y3, cx, cy, rad);
 	RotateDoublePoint(x4, y4, cx, cy, rad);
+
 	UpdateIntPoints();
 }
 
@@ -1231,16 +1466,18 @@ void CurveShap::Move(CSize delta)
 // 变换：旋转（绕中心）
 void CurveShap::Rotate(double degrees)
 {
-	CPoint center = GetCenter();
+	// 使用类成员 pt 作为旋转中心（调用方需在旋转前设置好 pt）
 	double rad = degrees * M_PI / 180.0;
-	double cos_a = cos(rad);
-	double sin_a = sin(rad);
+	double cos_a = std::cos(rad);
+	double sin_a = std::sin(rad);
+	double cx = static_cast<double>(pt.x);
+	double cy = static_cast<double>(pt.y);
 
 	for (size_t i = 0; i < xs.size(); ++i) {
-		double dx = xs[i] - center.x;
-		double dy = ys[i] - center.y;
-		xs[i] = center.x + dx * cos_a - dy * sin_a;
-		ys[i] = center.y + dx * sin_a + dy * cos_a;
+		double dx = xs[i] - cx;
+		double dy = ys[i] - cy;
+		xs[i] = cx + dx * cos_a - dy * sin_a;
+		ys[i] = cy + dx * sin_a + dy * cos_a;
 	}
 	UpdateSamples();
 }
@@ -1354,9 +1591,11 @@ void PolylineShap::Move(CSize delta)
 void PolylineShap::Rotate(double degrees)
 {
 	double rad = degrees * (acos(-1.0) / 180.0);
-	CPoint c = GetCenter();
-	double cx = static_cast<double>(c.x);
-	double cy = static_cast<double>(c.y);
+
+	// 使用类成员 pt 作为旋转中心（调用方需在旋转前设置好 pt）
+	double cx = static_cast<double>(pt.x);
+	double cy = static_cast<double>(pt.y);
+
 	for (size_t i = 0; i < xs.size(); ++i) {
 		RotateDoublePoint(xs[i], ys[i], cx, cy, rad);
 	}

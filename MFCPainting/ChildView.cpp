@@ -10,7 +10,13 @@
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
-
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+#include <algorithm>
 
 // CChildView
 
@@ -75,6 +81,16 @@ ON_COMMAND(ID_32798, &CChildView::OnLineWidth8)
 ON_WM_ERASEBKGND()
 ON_COMMAND(ID_32804, &CChildView::OnSeedFillMode)
 ON_COMMAND(ID_32805, &CChildView::OnBarrierFillMode)
+
+
+
+
+
+ON_COMMAND(ID_32808, &CChildView::On32808)
+ON_COMMAND(ID_32809, &CChildView::On32809)
+ON_COMMAND(ID_32810, &CChildView::On32810)
+ON_COMMAND(ID_32811, &CChildView::On32811)
+ON_COMMAND(ID_32812, &CChildView::OnPolyGon)
 END_MESSAGE_MAP()
 
 // CChildView 消息处理程序
@@ -191,8 +207,53 @@ void CChildView::OnPaint()
 	}
 
 	// 5. 在内存DC上绘制辅助点等
+	if (m_isSelectingClipRect) {
+		CPen pen(PS_DASH, 1, RGB(255, 0, 0)); // 红色虚线
+		CBrush* pOldBrush = (CBrush*)memDC.SelectStockObject(NULL_BRUSH);
+		CPen* pOldPen = memDC.SelectObject(&pen);
+		memDC.Rectangle(m_clipRect);
+		memDC.SelectObject(pOldPen);
+		memDC.SelectObject(pOldBrush);
+	}
+	// 如果正在旋转，绘制旋转中心
+	if (m_bRotating)
+	{
+		CPen pen(PS_SOLID, 1, RGB(0, 0, 255)); // 蓝色实线
+		CPen* pOldPen = memDC.SelectObject(&pen);
+		int r = 5; // 十字标记的半径
+		const CPoint& pt = FixedRotatePoint;
+		memDC.MoveTo(pt.x - r, pt.y);
+		memDC.LineTo(pt.x + r, pt.y);
+		memDC.MoveTo(pt.x, pt.y - r);
+		memDC.LineTo(pt.x, pt.y + r);
+		memDC.SelectObject(pOldPen);
+	}
+
+	// 新增：如果选中了图形，则显示操作提示
+	if (IsSelected) {
+		CShap* selectedShape = nullptr;
+		for (auto* shp : Shaps) {
+			if (shp->Selected) {
+				selectedShape = shp;
+				break;
+			}
+		}
+
+		if (selectedShape && !m_bDragging && !m_bRotating) {
+			CPoint center = selectedShape->GetCenter();
+			CString prompt = _T("左键长按拖动平移；长按拖动右键以右键开始时所在位置旋转；滚轮缩放");
+
+			// 设置文本颜色和背景
+			memDC.SetTextColor(RGB(100, 100, 100)); // 深灰色
+			memDC.SetBkMode(TRANSPARENT); // 背景透明
+
+			// 在图形中心点下方绘制提示
+			memDC.TextOut(center.x, center.y + 20, prompt);
+		}
+	}
+
 	if (!IsSelected) {
-		if (!AbleShapes.empty()&&Isfinish) {
+		if (!AbleShapes.empty() && Isfinish) {
 			ShapController* SC = new ShapController(AbleShapes);
 			SC->DrawIntersections(&memDC);
 			AbleShapes.clear();
@@ -204,7 +265,6 @@ void CChildView::OnPaint()
 		}
 		DrawDot(memDC);
 	}
-
 	// 6. 将内存DC的内容一次性绘制到屏幕上
 	dc.BitBlt(0, 0, rc.Width(), rc.Height(), &memDC, 0, 0, SRCCOPY);
 	memDC.SelectObject(pOldBitmap);
@@ -345,6 +405,16 @@ void CChildView::DrawPoly(CPoint& point)
 		points.push_back(point);
 	}
 }
+void CChildView::DrawPolyGon(CPoint& point)
+{
+	if (IsPolygon) {
+		points.push_back(point);
+		if (!PolygonShap::check(points)) {
+			points.pop_back();
+			AfxMessageBox(_T("多边形顶点不能共线与交叉，请重新选择最后一个点！"));
+		}
+	}
+}
 
 #pragma endregion
 #pragma region Save
@@ -401,6 +471,13 @@ void CChildView::CheckSelectedPoint(CPoint& point)
 
 
 #pragma region onMenu
+
+void CChildView::OnPolyGon()
+{
+	// TODO: 在此添加命令处理程序代码
+	ResetAllModes();
+	IsPolygon = true;
+}
 
 void CChildView::OnSeedFillMode()
 {
@@ -743,8 +820,21 @@ void CChildView::OnLButtonUp(UINT nFlags, CPoint point)
 		ReleaseCapture();
 		Invalidate(); // 最终重绘
 	}
-}
+	if (m_isSelectingClipRect) {
+		m_isSelectingClipRect = false;
+		ReleaseCapture();
 
+		m_clipRect.SetRect(m_clipStartPoint, point);
+		m_clipRect.NormalizeRect();
+
+		if (m_clipRect.Width() > 0 && m_clipRect.Height() > 0) {
+			ClipLinesWithRect(m_clipRect);
+		}
+
+		IsClipMode = false; // 裁剪完成，退出模式
+		Invalidate();
+	}
+}
 void CChildView::OnRButtonUp(UINT nFlags, CPoint point)
 {
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
@@ -753,6 +843,7 @@ void CChildView::OnRButtonUp(UINT nFlags, CPoint point)
 	if (m_bRotating) {
 		m_bRotating = false;
 		m_pRotated = nullptr;
+		FixedRotatePoint = NULL;
 		ReleaseCapture();
 		Invalidate();
 	}
@@ -778,6 +869,12 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 			IsPoly = false;
 			points.clear();
 		}
+		if (IsPolygon) {
+			PolygonShap* newadd = new PolygonShap(points);
+			Shaps.push_back(newadd);
+			IsPolygon = false;
+			points.clear();
+		}
 		if (IsInter) {
 			IsInter = false;
 			for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
@@ -801,7 +898,7 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 	// 找当前被选中的图元优先，否则使用命中检测
 	CShap* target = nullptr;
 	for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
-		if (Shaps[i]->Selected) { target = Shaps[i]; break; }
+		if (Shaps[i]->Selected) { target = Shaps[i];   Shaps[i]->pt = point; FixedRotatePoint = point;        break; }
 	}
 	if (!target) {
 		for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
@@ -816,6 +913,7 @@ void CChildView::OnRButtonDown(UINT nFlags, CPoint point)
 	// 初始角度（弧度）
 	m_lastRotateAngle = std::atan2(static_cast<double>(point.y - m_rotateCenter.y),
 		static_cast<double>(point.x - m_rotateCenter.x));
+	//将当前鼠标位置放到points中
 	SetCapture();
 }
 
@@ -859,6 +957,16 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 	// 如果是填充模式，执行填充并返回
 	if (IsSeedFill || IsBarrierFill) {
 		PerformFill(point);
+		return;
+	}
+
+	// 如果是裁剪模式，开始选择矩形
+	if (IsClipMode) {
+		m_isSelectingClipRect = true;
+		m_clipStartPoint = point;
+		m_clipRect.SetRect(point, point);
+		SetCapture();
+		Invalidate();
 		return;
 	}
 
@@ -958,9 +1066,8 @@ void CChildView::OnLButtonDown(UINT nFlags, CPoint point)
 		DrawPara(point);
 		DrawCur(point);
 		DrawPoly(point);
+		DrawPolyGon(point);
 	}
-
-
 	Invalidate(); // 触发重绘
 }
 
@@ -971,6 +1078,14 @@ void CChildView::OnMouseMove(UINT nFlags, CPoint point)
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
 
 	CWnd::OnMouseMove(nFlags, point);
+
+	// 实验4裁剪矩形选择中
+	if (m_isSelectingClipRect) {
+		m_clipRect.SetRect(m_clipStartPoint, point);
+		Invalidate();
+		return;
+	}
+
 	// 旋转优先处理
 	if (m_bRotating && m_pRotated) {
 		double curAngle = std::atan2(static_cast<double>(point.y - m_rotateCenter.y),
@@ -1041,6 +1156,7 @@ BOOL CChildView::OnEraseBkgnd(CDC* pDC)
 #pragma region Filed
 void CChildView::ResetAllModes()
 {
+	IsPoly = false;
 	Isfinish = false;
 	IsDrawLine = false;
 	IsCircle = false;
@@ -1057,6 +1173,8 @@ void CChildView::ResetAllModes()
 	IsCircleTangent = false;
 	IsSeedFill = false;
 	IsBarrierFill = false;
+	IsClipMode = false;
+	m_isSelectingClipRect = false;
 
 	// 清理相关状态
 	points.clear();
@@ -1142,7 +1260,7 @@ void CChildView::PerformFill(CPoint seedPoint)
 		SeedFill(m_fillImage, seedPoint, m_fillColor, boundaryColor);
 	}
 	else if (IsBarrierFill) {
-		FenceFill(m_fillImage, seedPoint, m_fillColor, boundaryColor);
+		ScanlineFill(m_fillImage, seedPoint, m_fillColor, boundaryColor);
 	}
 
 	m_fillImage.ReleaseDC();
@@ -1187,9 +1305,8 @@ void CChildView::SeedFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF
 
 }
 
-void CChildView::FenceFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor)
+void CChildView::ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLORREF boundaryColor)
 {
-	
 	if (img.IsNull()) return;
 
 	int width = img.GetWidth();
@@ -1199,9 +1316,6 @@ void CChildView::FenceFill(CImage& img, CPoint seed, COLORREF fillColor, COLORRE
 	if (oldColor == fillColor || oldColor == boundaryColor) {
 		return;
 	}
-
-	// 使用栅栏填充法 - 以种子点的x坐标作为栅栏
-	int fenceX = seed.x;
 
 	std::stack<CPoint> seeds;
 	seeds.push(seed);
@@ -1213,20 +1327,16 @@ void CChildView::FenceFill(CImage& img, CPoint seed, COLORREF fillColor, COLORRE
 		int x = currentSeed.x;
 		int y = currentSeed.y;
 
-		// 向左填充直到边界（栅栏左侧）
+		// 找到当前扫描线的左边界
 		int xLeft = x;
-		while (xLeft >= 0 &&
-			img.GetPixel(xLeft, y) != boundaryColor &&
-			img.GetPixel(xLeft, y) != fillColor) {
+		while (xLeft >= 0 && img.GetPixel(xLeft, y) != boundaryColor && img.GetPixel(xLeft, y) != fillColor) {
 			xLeft--;
 		}
 		xLeft++;
 
-		// 向右填充直到边界（栅栏右侧）
+		// 找到当前扫描线的右边界
 		int xRight = x;
-		while (xRight < width &&
-			img.GetPixel(xRight, y) != boundaryColor &&
-			img.GetPixel(xRight, y) != fillColor) {
+		while (xRight < width && img.GetPixel(xRight, y) != boundaryColor && img.GetPixel(xRight, y) != fillColor) {
 			xRight++;
 		}
 		xRight--;
@@ -1236,63 +1346,223 @@ void CChildView::FenceFill(CImage& img, CPoint seed, COLORREF fillColor, COLORRE
 			img.SetPixel(i, y, fillColor);
 		}
 
-		// 在上方和下方扫描线寻找新的种子点 - 关键区别：分区处理
+		// 在上方和下方扫描线寻找新的种子点
 		for (int i = xLeft; i <= xRight; ++i) {
-			// 栅栏左侧的种子点处理
-			if (i < fenceX) {
-				// 上方 - 只在栅栏左侧寻找种子点
-				if (y > 0) {
-					COLORREF colorAbove = img.GetPixel(i, y - 1);
-					if (colorAbove != boundaryColor && colorAbove != fillColor) {
-						seeds.push(CPoint(i, y - 1));
-					}
-				}
-				// 下方 - 只在栅栏左侧寻找种子点
-				if (y < height - 1) {
-					COLORREF colorBelow = img.GetPixel(i, y + 1);
-					if (colorBelow != boundaryColor && colorBelow != fillColor) {
-						seeds.push(CPoint(i, y + 1));
-					}
+			// 上方
+			if (y > 0) {
+				COLORREF colorAbove = img.GetPixel(i, y - 1);
+				if (colorAbove != boundaryColor && colorAbove != fillColor) {
+					seeds.push(CPoint(i, y - 1));
 				}
 			}
-			// 栅栏右侧的种子点处理
-			else if (i > fenceX) {
-				// 上方 - 只在栅栏右侧寻找种子点
-				if (y > 0) {
-					COLORREF colorAbove = img.GetPixel(i, y - 1);
-					if (colorAbove != boundaryColor && colorAbove != fillColor) {
-						seeds.push(CPoint(i, y - 1));
-					}
-				}
-				// 下方 - 只在栅栏右侧寻找种子点
-				if (y < height - 1) {
-					COLORREF colorBelow = img.GetPixel(i, y + 1);
-					if (colorBelow != boundaryColor && colorBelow != fillColor) {
-						seeds.push(CPoint(i, y + 1));
-					}
-				}
-			}
-			// 栅栏位置的特殊处理 - 可以同时向两侧扩展
-			else {
-				// 上方
-				if (y > 0) {
-					COLORREF colorAbove = img.GetPixel(i, y - 1);
-					if (colorAbove != boundaryColor && colorAbove != fillColor) {
-						seeds.push(CPoint(i, y - 1));
-					}
-				}
-				// 下方
-				if (y < height - 1) {
-					COLORREF colorBelow = img.GetPixel(i, y + 1);
-					if (colorBelow != boundaryColor && colorBelow != fillColor) {
-						seeds.push(CPoint(i, y + 1));
-					}
+			// 下方
+			if (y < height - 1) {
+				COLORREF colorBelow = img.GetPixel(i, y + 1);
+				if (colorBelow != boundaryColor && colorBelow != fillColor) {
+					seeds.push(CPoint(i, y + 1));
 				}
 			}
 		}
 	}
 }
-
 #pragma endregion
 
+
+
+
+void CChildView::On32808()
+{
+	// 直线裁剪：cohen-sutherland
+	ResetAllModes();
+	IsClipMode = true;
+	m_clipAlgo = 0;
+	
+}
+
+void CChildView::On32809()
+{
+	// TODO: 在此添加命令处理程序代码
+	// 直线裁剪：中点法
+	ResetAllModes();
+	IsClipMode = true;
+	m_clipAlgo = 1;
+
+}
+
+void CChildView::On32810()
+{
+	// TODO: 在此添加命令处理程序代码
+	//矩形区域裁剪Sutherland-Hodgman
+}
+
+void CChildView::On32811()
+{
+	// TODO: 在此添加命令处理程序代码
+	//矩形区域裁剪Weiler-Atherton
+}
+
+
+static inline int CS_OutCode(int x, int y, const CRect& r) {
+	int code = 0;
+	if (x < r.left)  code |= 1; // LEFT
+	if (x > r.right) code |= 2; // RIGHT
+	if (y < r.top)   code |= 4; // TOP
+	if (y > r.bottom)code |= 8; // BOTTOM
+	return code;
+}
+
+// Cohen-Sutherland 裁剪：输入/输出为整型端点；返回 true 表示有被裁后的线段（修改 x0,y0,x1,y1）
+static bool CohenSutherlandClipLine(int& x0, int& y0, int& x1, int& y1, const CRect& rc) {
+	int out0 = CS_OutCode(x0, y0, rc);
+	int out1 = CS_OutCode(x1, y1, rc);
+	bool accept = false;
+	while (true) {
+		if ((out0 | out1) == 0) { // 都在内部
+			accept = true; break;
+		}
+		if ((out0 & out1) != 0) { // 都在同一外部区域 -> 拒绝
+			break;
+		}
+		// 选择外部点
+		int outcodeOut = out0 ? out0 : out1;
+		double x = 0.0, y = 0.0;
+		double dx = x1 - x0;
+		double dy = y1 - y0;
+		if (outcodeOut & 4) { // TOP
+			x = x0 + dx * (rc.top - y0) / (double)dy;
+			y = rc.top;
+		}
+		else if (outcodeOut & 8) { // BOTTOM
+			x = x0 + dx * (rc.bottom - y0) / (double)dy;
+			y = rc.bottom;
+		}
+		else if (outcodeOut & 1) { // LEFT
+			y = y0 + dy * (rc.left - x0) / (double)dx;
+			x = rc.left;
+		}
+		else if (outcodeOut & 2) { // RIGHT
+			y = y0 + dy * (rc.right - x0) / (double)dx;
+			x = rc.right;
+		}
+		// 替换外部点
+		if (outcodeOut == out0) {
+			x0 = static_cast<int>(std::lround(x));
+			y0 = static_cast<int>(std::lround(y));
+			out0 = CS_OutCode(x0, y0, rc);
+		}
+		else {
+			x1 = static_cast<int>(std::lround(x));
+			y1 = static_cast<int>(std::lround(y));
+			out1 = CS_OutCode(x1, y1, rc);
+		}
+	}
+	return accept;
+}
+
+// 线段-线段相交（闭区间），返回是否相交（double 版本）
+static bool SegSegIntersectDD(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, double& ix, double& iy) {
+	double den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+	if (std::abs(den) < 1e-12) return false;
+	double px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den;
+	double py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den;
+	auto inSeg = [&](double px_, double a, double b)->bool {
+		double lo = std::min(a, b) - 1e-9, hi = std::max(a, b) + 1e-9;
+		return px_ >= lo && px_ <= hi;
+		};
+	if (inSeg(px, x1, x2) && inSeg(py, y1, y2) && inSeg(px, x3, x4) && inSeg(py, y3, y4)) {
+		ix = px; iy = py; return true;
+	}
+	return false;
+}
+
+// 判断线段是否与矩形相交或有端点在矩形内
+static bool SegmentIntersectsRect(double x0, double y0, double x1, double y1, const CRect& rc) {
+	// 若任一点在矩形内则相交
+	if (x0 >= rc.left && x0 <= rc.right && y0 >= rc.top && y0 <= rc.bottom) return true;
+	if (x1 >= rc.left && x1 <= rc.right && y1 >= rc.top && y1 <= rc.bottom) return true;
+	// 否则检测与四条边的相交
+	double ix, iy;
+	if (SegSegIntersectDD(x0, y0, x1, y1, rc.left, rc.top, rc.right, rc.top, ix, iy)) return true;
+	if (SegSegIntersectDD(x0, y0, x1, y1, rc.right, rc.top, rc.right, rc.bottom, ix, iy)) return true;
+	if (SegSegIntersectDD(x0, y0, x1, y1, rc.right, rc.bottom, rc.left, rc.bottom, ix, iy)) return true;
+	if (SegSegIntersectDD(x0, y0, x1, y1, rc.left, rc.bottom, rc.left, rc.top, ix, iy)) return true;
+	return false;
+}
+
+// 中点分割：递归分割，收集落在矩形内的子段（阈值: 最大深度或段长度小于 1 像素）
+static void MidpointSubdivisionCollect(double x0, double y0, double x1, double y1, const CRect& rc,
+	std::vector<std::pair<CPoint, CPoint>>& out, int depth = 0)
+{
+	if (depth > 20) return; // 避免无限递归
+	// 若线段完全在矩形内，直接保留
+	if (x0 >= rc.left && x0 <= rc.right && y0 >= rc.top && y0 <= rc.bottom &&
+		x1 >= rc.left && x1 <= rc.right && y1 >= rc.top && y1 <= rc.bottom) {
+		out.emplace_back(CPoint((int)std::lround(x0), (int)std::lround(y0)), CPoint((int)std::lround(x1), (int)std::lround(y1)));
+		return;
+	}
+	// 若线段与矩形完全不相交，丢弃
+	if (!SegmentIntersectsRect(x0, y0, x1, y1, rc)) return;
+	// 若长度已经很小，则尝试取段中点并判断两个小段
+	double dx = x1 - x0, dy = y1 - y0;
+	double len2 = dx * dx + dy * dy;
+	if (len2 <= 1.0) {
+		// 若中点在矩形内，则把该近似点作为微小段
+		double mx = 0.5 * (x0 + x1), my = 0.5 * (y0 + y1);
+		if (mx >= rc.left && mx <= rc.right && my >= rc.top && my <= rc.bottom) {
+			out.emplace_back(CPoint((int)std::lround(x0), (int)std::lround(y0)), CPoint((int)std::lround(x1), (int)std::lround(y1)));
+		}
+		return;
+	}
+	// 分割并递归
+	double mx = 0.5 * (x0 + x1), my = 0.5 * (y0 + y1);
+	MidpointSubdivisionCollect(x0, y0, mx, my, rc, out, depth + 1);
+	MidpointSubdivisionCollect(mx, my, x1, y1, rc, out, depth + 1);
+}
+
+// 将矩形内的线段替换/分割（对 LineShap 列表进行修改）
+void CChildView::ClipLinesWithRect(const CRect& rect)
+{
+	// 逐个检查 Shaps，向量逆序遍历以便安全删除/插入
+	for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+		auto* shp = Shaps[i];
+		auto* ln = dynamic_cast<LineShap*>(shp);
+		if (!ln) continue; // 只处理线段
+
+		// 获取端点（非 const API）
+		CPoint a, b;
+		ln->GetEndpoints(a, b);
+		int originalDrawMethod = ln->GetDrawMethod();
+		int originalLineWidth = ln->GetLineWidth();
+		int originalLineStyle = ln->GetLineStyle();
+
+		if (m_clipAlgo == 0) {
+			int x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
+			bool ok = CohenSutherlandClipLine(x0, y0, x1, y1, rect);
+			// 删除原线段
+			Shaps.erase(Shaps.begin() + i);
+			ln->Destroy();
+			delete ln;
+			if (ok) {
+				// 添加被裁剪后的线段（保留线宽/线型）
+				LineShap* newln = new LineShap(CPoint(x0, y0), CPoint(x1, y1), originalDrawMethod, originalLineWidth, originalLineStyle);
+				Shaps.insert(Shaps.begin() + i, newln);
+			}
+		}
+		else {
+			// 中点分割：可能产生多个子段
+			std::vector<std::pair<CPoint, CPoint>> kept;
+			MidpointSubdivisionCollect((double)a.x, (double)a.y, (double)b.x, (double)b.y, rect, kept, 0);
+			// 删除原线段
+			Shaps.erase(Shaps.begin() + i);
+			ln->Destroy();
+			delete ln;
+			// 插入所有保留的子段（保持原线段属性）
+			for (int k = static_cast<int>(kept.size()) - 1; k >= 0; --k) {
+				auto& seg = kept[k];
+				LineShap* newln = new LineShap(seg.first, seg.second, originalDrawMethod, originalLineWidth, originalLineStyle);
+				Shaps.insert(Shaps.begin() + i, newln);
+			}
+		}
+	}
+}
 
