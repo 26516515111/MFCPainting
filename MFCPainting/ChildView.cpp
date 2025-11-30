@@ -86,10 +86,10 @@ ON_COMMAND(ID_32805, &CChildView::OnBarrierFillMode)
 
 
 
-ON_COMMAND(ID_32808, &CChildView::On32808)
-ON_COMMAND(ID_32809, &CChildView::On32809)
-ON_COMMAND(ID_32810, &CChildView::On32810)
-ON_COMMAND(ID_32811, &CChildView::On32811)
+ON_COMMAND(ID_32808, &CChildView::OnCLineCut)
+ON_COMMAND(ID_32809, &CChildView::OnMLineCut)
+ON_COMMAND(ID_32810, &CChildView::OnSRectCut)
+ON_COMMAND(ID_32811, &CChildView::OnWRectLine)
 ON_COMMAND(ID_32812, &CChildView::OnPolyGon)
 END_MESSAGE_MAP()
 
@@ -471,6 +471,40 @@ void CChildView::CheckSelectedPoint(CPoint& point)
 
 
 #pragma region onMenu
+
+
+void CChildView::OnCLineCut()
+{
+	// 直线裁剪：cohen-sutherland
+	ResetAllModes();
+	IsClipMode = true;
+	m_clipAlgo = 0;
+
+}
+
+void CChildView::OnMLineCut()
+{
+	// TODO: 在此添加命令处理程序代码
+	// 直线裁剪：中点法
+	ResetAllModes();
+	IsClipMode = true;
+	m_clipAlgo = 1;
+
+}
+
+void CChildView::OnSRectCut()
+{
+	// TODO: 在此添加命令处理程序代码
+	//矩形区域裁剪Sutherland-Hodgman
+}
+
+void CChildView::OnWRectLine()
+{
+	// TODO: 在此添加命令处理程序代码
+	//矩形区域裁剪Weiler-Atherton
+}
+
+
 
 void CChildView::OnPolyGon()
 {
@@ -1370,36 +1404,6 @@ void CChildView::ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLO
 
 
 
-void CChildView::On32808()
-{
-	// 直线裁剪：cohen-sutherland
-	ResetAllModes();
-	IsClipMode = true;
-	m_clipAlgo = 0;
-	
-}
-
-void CChildView::On32809()
-{
-	// TODO: 在此添加命令处理程序代码
-	// 直线裁剪：中点法
-	ResetAllModes();
-	IsClipMode = true;
-	m_clipAlgo = 1;
-
-}
-
-void CChildView::On32810()
-{
-	// TODO: 在此添加命令处理程序代码
-	//矩形区域裁剪Sutherland-Hodgman
-}
-
-void CChildView::On32811()
-{
-	// TODO: 在此添加命令处理程序代码
-	//矩形区域裁剪Weiler-Atherton
-}
 
 
 static inline int CS_OutCode(int x, int y, const CRect& r) {

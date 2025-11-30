@@ -238,10 +238,10 @@ private:
 public:
 	afx_msg void OnSeedFillMode();
 	afx_msg void OnBarrierFillMode();
-	afx_msg void On32808();
-	afx_msg void On32809();
-	afx_msg void On32810();
-	afx_msg void On32811();
+	afx_msg void OnCLineCut();
+	afx_msg void OnMLineCut();
+	afx_msg void OnSRectCut();
+	afx_msg void OnWRectLine();
 private:
 	void ClipLinesWithRect(const CRect& rect);
 public:
