@@ -856,10 +856,12 @@ void PolygonShap::Draw(CDC* pdc)
 
 	// ´´½¨»­±ÊºÍ»­Ë¢
 	CPen pen(PS_SOLID, 1, RGB(0, 0, 0));
-	CBrush brush(RGB(255, 255, 255)); // °×É«Ìî³ä
+	//CBrush brush(RGB(255, 255, 255)); // °×É«Ìî³ä
 
 	CPen* pOldPen = pdc->SelectObject(&pen);
-	CBrush* pOldBrush = pdc->SelectObject(&brush);
+	//CBrush* pOldBrush = pdc->SelectObject(&brush);
+	CBrush* pOldBrush =  (CBrush*)pdc->SelectStockObject(NULL_BRUSH);
+
 
 	pdc->Polygon(ptsInt.data(), static_cast<int>(ptsInt.size()));
 
