@@ -911,7 +911,7 @@ void PolygonShap::Move(CSize delta)
 
 void PolygonShap::Rotate(double degrees)
 {
-	CPoint center = GetCenter();
+	CPoint center = pt;
 	double rad = degrees * (acos(-1.0) / 180.0);
 	double cosA = cos(rad);
 	double sinA = sin(rad);
@@ -2284,4 +2284,228 @@ void ShapController::DrawIntersections(CDC* pdc) const
 		y += 16; // 行间距
 		// 避免太长列表溢出：若有太多可以只显示前 N（此处显示全部）
 	}
+}
+
+
+namespace {
+	// 获取与裁剪边界的交点
+	CPoint GetIntersect(const CPoint& s, const CPoint& p, int edge, const CRect& rect) {
+		double m = 0.0;
+		if (p.x != s.x) m = (double)(p.y - s.y) / (double)(p.x - s.x);
+
+		if (edge == 0) // 左边界
+			return CPoint(rect.left, s.y + (int)((rect.left - s.x) * m));
+		if (edge == 1) // 右边界
+			return CPoint(rect.right, s.y + (int)((rect.right - s.x) * m));
+		if (edge == 2) // 上边界
+			return CPoint(s.x + (int)((rect.top - s.y) / m), rect.top);
+		// 下边界
+		return CPoint(s.x + (int)((rect.bottom - s.y) / m), rect.bottom);
+	}
+
+	// 检查点是否在边界内侧
+	bool IsInside(const CPoint& p, int edge, const CRect& rect) {
+		if (edge == 0) return p.x >= rect.left;   // 左
+		if (edge == 1) return p.x <= rect.right;  // 右
+		if (edge == 2) return p.y >= rect.top;    // 上
+		return p.y <= rect.bottom; // 下
+	}
+
+	// 对单个边界进行裁剪
+	std::vector<CPoint> ClipAgainstEdge(const std::vector<CPoint>& subjectPolygon, int edge, const CRect& rect) {
+		std::vector<CPoint> outputList;
+		if (subjectPolygon.empty()) return outputList;
+
+		CPoint s = subjectPolygon.back();
+		for (const auto& p : subjectPolygon) {
+			bool s_inside = IsInside(s, edge, rect);
+			bool p_inside = IsInside(p, edge, rect);
+
+			if (s_inside && p_inside) { // Case 1: 两个顶点都在内部
+				outputList.push_back(p);
+			}
+			else if (s_inside && !p_inside) { // Case 2: S 在内部, P 在外部
+				outputList.push_back(GetIntersect(s, p, edge, rect));
+			}
+			else if (!s_inside && p_inside) { // Case 3: S 在外部, P 在内部
+				outputList.push_back(GetIntersect(s, p, edge, rect));
+				outputList.push_back(p);
+			}
+			// Case 4: 两个顶点都在外部, 无输出
+
+			s = p;
+		}
+		return outputList;
+	}
+}
+
+PolygonShap* PolygonShap::Clip(const CRect& rect) const
+{
+	std::vector<CPoint> currentVertices = ptsInt;
+
+	// 依次对四个边界进行裁剪
+	for (int edge = 0; edge < 4; ++edge) {
+		if (currentVertices.empty()) break;
+		currentVertices = ClipAgainstEdge(currentVertices, edge, rect);
+	}
+
+	if (currentVertices.size() < 3) {
+		return nullptr; // 裁剪后不成多边形
+	}
+
+	return new PolygonShap(currentVertices);
+}
+
+// Weiler-Atherton 算法实现
+namespace {
+	enum IntersectionType { NONE, ENTERING, LEAVING };
+
+	struct VertexInfo {
+		CPoint pt;
+		IntersectionType type = NONE;
+		bool isIntersection = false;
+		int otherPolyIndex = -1; // 在另一个多边形列表中的对应交点索引
+		double dist = 0.0; // 沿边的距离，用于排序
+		bool visited = false;
+	};
+
+	// 比较函数，用于在线段上对顶点进行排序
+	bool compareVertices(const VertexInfo& a, const VertexInfo& b) {
+		return a.dist < b.dist;
+	}
+
+	// 检查点是否在矩形内
+	bool is_inside_rect(const CPoint& p, const CRect& rect) {
+		return p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom;
+	}
+
+	// 线段与线段的交点计算
+	bool get_line_intersection(CPoint p1, CPoint p2, CPoint p3, CPoint p4, CPoint& intersection) {
+		long long det = (long long)(p2.x - p1.x) * (p4.y - p3.y) - (long long)(p2.y - p1.y) * (p4.x - p3.x);
+		if (det == 0) return false; // 平行或共线
+
+		double t = (double)((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / det;
+		double u = (double)-((p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x)) / det;
+
+		if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+			intersection.x = (long)(p1.x + t * (p2.x - p1.x));
+			intersection.y = (long)(p1.y + t * (p2.y - p1.y));
+			return true;
+		}
+		return false;
+	}
+}
+
+std::vector<PolygonShap*> PolygonShap::ClipWA(const CRect& rect) const {
+	std::vector<PolygonShap*> resultPolygons;
+	std::vector<std::vector<VertexInfo>> subjectLists, clipLists;
+
+	// 1. 构建裁剪窗口（矩形）的顶点列表
+	std::vector<CPoint> clipVertices = {
+		{rect.left, rect.top}, {rect.right, rect.top},
+		{rect.right, rect.bottom}, {rect.left, rect.bottom}
+	};
+
+	// 2. 初始化 subjectLists 和 clipLists
+	for (size_t i = 0; i < ptsInt.size(); ++i) {
+		subjectLists.push_back({ {ptsInt[i]} });
+	}
+	for (size_t i = 0; i < clipVertices.size(); ++i) {
+		clipLists.push_back({ {clipVertices[i]} });
+	}
+
+	// 3. 计算交点并构建完整的顶点列表
+	for (size_t i = 0; i < ptsInt.size(); ++i) {
+		CPoint p1 = ptsInt[i];
+		CPoint p2 = ptsInt[(i + 1) % ptsInt.size()];
+
+		for (size_t j = 0; j < clipVertices.size(); ++j) {
+			CPoint c1 = clipVertices[j];
+			CPoint c2 = clipVertices[(j + 1) % clipVertices.size()];
+
+			CPoint intersection;
+			if (get_line_intersection(p1, p2, c1, c2, intersection)) {
+				bool p2_inside = is_inside_rect(p2, rect);
+				IntersectionType type = p2_inside ? ENTERING : LEAVING;
+
+				double dist_subj = hypot((double)intersection.x - p1.x, (double)intersection.y - p1.y);
+				double dist_clip = hypot((double)intersection.x - c1.x, (double)intersection.y - c1.y);
+
+				subjectLists[i].push_back({ intersection, type, true, (int)j, dist_subj });
+				clipLists[j].push_back({ intersection, type, true, (int)i, dist_clip });
+			}
+		}
+	}
+
+	// 4. 对每个列表中的交点进行排序
+	for (auto& list : subjectLists) std::sort(list.begin(), list.end(), compareVertices);
+	for (auto& list : clipLists) std::sort(list.begin(), list.end(), compareVertices);
+
+	// 5. 将列表扁平化
+	std::vector<VertexInfo> finalSubjectList, finalClipList;
+	for (const auto& list : subjectLists) for (const auto& v : list) finalSubjectList.push_back(v);
+	for (const auto& list : clipLists) for (const auto& v : list) finalClipList.push_back(v);
+
+	// 6. 建立交点之间的双向链接
+	for (size_t i = 0; i < finalSubjectList.size(); ++i) {
+		if (finalSubjectList[i].isIntersection) {
+			for (size_t j = 0; j < finalClipList.size(); ++j) {
+				if (finalClipList[j].isIntersection && finalSubjectList[i].pt == finalClipList[j].pt) {
+					finalSubjectList[i].otherPolyIndex = j;
+					finalClipList[j].otherPolyIndex = i;
+					break;
+				}
+			}
+		}
+	}
+
+	// 7. 跟踪生成结果多边形
+	for (size_t i = 0; i < finalSubjectList.size(); ++i) {
+		if (finalSubjectList[i].type == ENTERING && !finalSubjectList[i].visited) {
+			std::vector<CPoint> newPoly;
+			VertexInfo* currentV = &finalSubjectList[i];
+			bool onSubject = true;
+			size_t currentIndex = i;
+
+			while (!currentV->visited) {
+				currentV->visited = true;
+				newPoly.push_back(currentV->pt);
+
+				if (onSubject) {
+					currentIndex = (currentIndex + 1) % finalSubjectList.size();
+					currentV = &finalSubjectList[currentIndex];
+				}
+				else {
+					currentIndex = (currentIndex + 1) % finalClipList.size();
+					currentV = &finalClipList[currentIndex];
+				}
+
+				if (currentV->isIntersection) {
+					currentIndex = currentV->otherPolyIndex;
+					onSubject = !onSubject;
+					if (onSubject) currentV = &finalSubjectList[currentIndex];
+					else currentV = &finalClipList[currentIndex];
+				}
+			}
+			if (newPoly.size() >= 3) {
+				resultPolygons.push_back(new PolygonShap(newPoly));
+			}
+		}
+	}
+
+	// 8. 处理完全在内部的情况
+	if (resultPolygons.empty() && !ptsInt.empty()) {
+		bool all_inside = true;
+		for (const auto& pt : ptsInt) {
+			if (!is_inside_rect(pt, rect)) {
+				all_inside = false;
+				break;
+			}
+		}
+		if (all_inside) {
+			resultPolygons.push_back(new PolygonShap(ptsInt));
+		}
+	}
+
+	return resultPolygons;
 }

@@ -6,7 +6,7 @@
 #include "framework.h"
 #include "MFCPainting.h"
 #include "ChildView.h"
-
+#include "CShap.h"
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -89,7 +89,7 @@ ON_COMMAND(ID_32805, &CChildView::OnBarrierFillMode)
 ON_COMMAND(ID_32808, &CChildView::OnCLineCut)
 ON_COMMAND(ID_32809, &CChildView::OnMLineCut)
 ON_COMMAND(ID_32810, &CChildView::OnSRectCut)
-ON_COMMAND(ID_32811, &CChildView::OnWRectLine)
+ON_COMMAND(ID_32811, &CChildView::OnWRectCut)
 ON_COMMAND(ID_32812, &CChildView::OnPolyGon)
 END_MESSAGE_MAP()
 
@@ -494,14 +494,18 @@ void CChildView::OnMLineCut()
 
 void CChildView::OnSRectCut()
 {
-	// TODO: 在此添加命令处理程序代码
-	//矩形区域裁剪Sutherland-Hodgman
+	// 矩形区域裁剪Sutherland-Hodgman
+	ResetAllModes();
+	IsClipMode = true;
+	m_clipAlgo = 2; // 2 代表Sutherland-Hodgman
 }
-
-void CChildView::OnWRectLine()
+void CChildView::OnWRectCut()
 {
 	// TODO: 在此添加命令处理程序代码
 	//矩形区域裁剪Weiler-Atherton
+	ResetAllModes();
+	IsClipMode = true;
+	m_clipAlgo = 3;
 }
 
 
@@ -862,7 +866,15 @@ void CChildView::OnLButtonUp(UINT nFlags, CPoint point)
 		m_clipRect.NormalizeRect();
 
 		if (m_clipRect.Width() > 0 && m_clipRect.Height() > 0) {
-			ClipLinesWithRect(m_clipRect);
+			if (m_clipAlgo <= 1) { // 0和1用于直线裁剪
+				ClipLinesWithRect(m_clipRect);
+			}
+			else if (m_clipAlgo == 2) { // 2用于Sutherland-Hodgman
+				ClipPolygonsWithRect(m_clipRect);
+			}
+			else if (m_clipAlgo == 3) { // 3用于Weiler-Atherton
+				ClipPolygonsWithRectWA(m_clipRect);
+			}
 		}
 
 		IsClipMode = false; // 裁剪完成，退出模式
@@ -1570,3 +1582,56 @@ void CChildView::ClipLinesWithRect(const CRect& rect)
 	}
 }
 
+
+void CChildView::ClipPolygonsWithRect(const CRect& rect)
+{
+	std::vector<CShap*> newShapes; // 存储裁剪后的新图形和未受影响的图形
+
+	for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+		auto* shp = Shaps[i];
+		auto* poly = dynamic_cast<PolygonShap*>(shp);
+
+		if (poly) {
+			// 这是一个多边形，尝试裁剪
+			PolygonShap* clippedPoly = poly->Clip(rect);
+
+			// 删除旧的多边形
+			Shaps.erase(Shaps.begin() + i);
+			delete poly;
+
+			if (clippedPoly) {
+				// 如果裁剪后仍然存在，则添加到场景中
+				Shaps.insert(Shaps.begin() + i, clippedPoly);
+			}
+		}
+		// 其他类型的图形（直线、圆等）保持不变
+	}
+	Invalidate(); // 重绘以显示结果
+}
+
+void CChildView::ClipPolygonsWithRectWA(const CRect& rect)
+{
+	std::vector<CShap*> newShapes; // 存储裁剪后的新图形
+
+	for (int i = static_cast<int>(Shaps.size()) - 1; i >= 0; --i) {
+		auto* shp = Shaps[i];
+		auto* poly = dynamic_cast<PolygonShap*>(shp);
+
+		if (poly) {
+			// 这是一个多边形，使用Weiler-Atherton进行裁剪
+			std::vector<PolygonShap*> clippedPolys = poly->ClipWA(rect);
+
+			// 删除旧的多边形
+			Shaps.erase(Shaps.begin() + i);
+			delete poly;
+
+			// 添加所有裁剪后生成的新多边形
+			if (!clippedPolys.empty()) {
+				for (auto* newPoly : clippedPolys) {
+					Shaps.insert(Shaps.begin() + i, newPoly);
+				}
+			}
+		}
+	}
+	Invalidate(); // 重绘以显示结果
+}

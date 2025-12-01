@@ -241,9 +241,11 @@ public:
 	afx_msg void OnCLineCut();
 	afx_msg void OnMLineCut();
 	afx_msg void OnSRectCut();
-	afx_msg void OnWRectLine();
+	afx_msg void OnWRectCut();
 private:
 	void ClipLinesWithRect(const CRect& rect);
+	void ClipPolygonsWithRect(const CRect& rect);
+	void ClipPolygonsWithRectWA(const CRect& rect);
 public:
 	afx_msg void OnPolyGon();
 };

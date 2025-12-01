@@ -352,7 +352,8 @@ public:
 	void Draw(CDC* pdc) override;
 	bool IsSelected(CPoint point) override;
 	void DrawSelection(CDC* pdc) override;
-
+	PolygonShap* Clip(const CRect& rect) const;
+	std::vector<PolygonShap*> ClipWA(const CRect& rect) const;
 	static bool check(const std::vector<CPoint>& points);
 
 
