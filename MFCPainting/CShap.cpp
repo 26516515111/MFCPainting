@@ -2448,6 +2448,15 @@ std::vector<PolygonShap*> PolygonShap::ClipWA(const CRect& rect) const {
 	for (const auto& list : subjectLists) for (const auto& v : list) finalSubjectList.push_back(v);
 	for (const auto& list : clipLists) for (const auto& v : list) finalClipList.push_back(v);
 
+	//任师傅最后选择了，直接将交点以交替的形式标记为进入或离开
+	bool isEntering = true;
+	for (auto& vertex : finalSubjectList) {
+		if (vertex.isIntersection) {
+			vertex.type = isEntering ? ENTERING : LEAVING;
+			isEntering = !isEntering;
+		}
+	}
+
 	// 6. 建立交点之间的双向链接
 	for (size_t i = 0; i < finalSubjectList.size(); ++i) {
 		if (finalSubjectList[i].isIntersection) {
