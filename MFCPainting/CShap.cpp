@@ -2291,18 +2291,30 @@ void ShapController::DrawIntersections(CDC* pdc) const
 
 namespace {
 	// 获取与裁剪边界的交点
-	CPoint GetIntersect(const CPoint& s, const CPoint& p, int edge, const CRect& rect) {
-		double m = 0.0;
-		if (p.x != s.x) m = (double)(p.y - s.y) / (double)(p.x - s.x);
 
-		if (edge == 0) // 左边界
-			return CPoint(rect.left, s.y + (int)((rect.left - s.x) * m));
-		if (edge == 1) // 右边界
-			return CPoint(rect.right, s.y + (int)((rect.right - s.x) * m));
-		if (edge == 2) // 上边界
-			return CPoint(s.x + (int)((rect.top - s.y) / m), rect.top);
-		// 下边界
-		return CPoint(s.x + (int)((rect.bottom - s.y) / m), rect.bottom);
+	CPoint GetIntersect(const CPoint& s, const CPoint& p, int edge, const CRect& rect) {
+		double dx = static_cast<double>(p.x - s.x);
+		double dy = static_cast<double>(p.y - s.y);
+
+		if (edge == 0) { // 左边界
+			if (dx == 0) return CPoint(rect.left, s.y); // 垂直线特殊处理
+			double t = (static_cast<double>(rect.left) - s.x) / dx;
+			return CPoint(rect.left, static_cast<int>(std::round(s.y + t * dy)));
+		}
+		if (edge == 1) { // 右边界
+			if (dx == 0) return CPoint(rect.right, s.y); // 垂直线特殊处理
+			double t = (static_cast<double>(rect.right) - s.x) / dx;
+			return CPoint(rect.right, static_cast<int>(std::round(s.y + t * dy)));
+		}
+		if (edge == 2) { // 上边界
+			if (dy == 0) return CPoint(s.x, rect.top); // 水平线特殊处理
+			double t = (static_cast<double>(rect.top) - s.y) / dy;
+			return CPoint(static_cast<int>(std::round(s.x + t * dx)), rect.top);
+		}
+		// 下边界 (edge == 3)
+		if (dy == 0) return CPoint(s.x, rect.bottom); // 水平线特殊处理
+		double t = (static_cast<double>(rect.bottom) - s.y) / dy;
+		return CPoint(static_cast<int>(std::round(s.x + t * dx)), rect.bottom);
 	}
 
 	// 检查点是否在边界内侧
@@ -2358,6 +2370,8 @@ PolygonShap* PolygonShap::Clip(const CRect& rect) const
 	return new PolygonShap(currentVertices);
 }
 
+
+
 // Weiler-Atherton 算法实现
 namespace {
 	enum IntersectionType { NONE, ENTERING, LEAVING };
@@ -2398,6 +2412,7 @@ namespace {
 	}
 }
 
+// Weiler-Atherton 裁剪
 std::vector<PolygonShap*> PolygonShap::ClipWA(const CRect& rect) const {
 	std::vector<PolygonShap*> resultPolygons;
 	std::vector<std::vector<VertexInfo>> subjectLists, clipLists;
@@ -2418,17 +2433,45 @@ std::vector<PolygonShap*> PolygonShap::ClipWA(const CRect& rect) const {
 
 	// 3. 计算交点并构建完整的顶点列表
 	for (size_t i = 0; i < ptsInt.size(); ++i) {
-		CPoint p1 = ptsInt[i];
-		CPoint p2 = ptsInt[(i + 1) % ptsInt.size()];
+		CPoint p1 = ptsInt[i];//多变形边的起点
+		CPoint p2 = ptsInt[(i + 1) % ptsInt.size()];//多变形边的终点
 
 		for (size_t j = 0; j < clipVertices.size(); ++j) {
-			CPoint c1 = clipVertices[j];
-			CPoint c2 = clipVertices[(j + 1) % clipVertices.size()];
+			CPoint c1 = clipVertices[j];//裁剪边的起点
+			CPoint c2 = clipVertices[(j + 1) % clipVertices.size()];//裁剪边的终点
+			// 计算交点
 
 			CPoint intersection;
-			if (get_line_intersection(p1, p2, c1, c2, intersection)) {
+			/*if (get_line_intersection(p1, p2, c1, c2, intersection)) {
 				bool p2_inside = is_inside_rect(p2, rect);
-				IntersectionType type = p2_inside ? ENTERING : LEAVING;
+				IntersectionType type = p2_inside ? ENTERING : LEAVING;*/
+			if (get_line_intersection(p1, p2, c1, c2, intersection)) {
+				// 使用向量叉积判断进入/离开，更鲁棒
+				// 叉积 = (p2-p1) x (c2-c1)
+				long long cross_product = (long long)(p1.x - p2.x) * (c1.y - c2.y) - (long long)(p1.y - p2.y) * (c1.x - c2.x);
+
+				IntersectionType type = NONE;
+				if (cross_product > 0) {
+					type = LEAVING; // 顺时针裁剪窗口，叉积>0为离开
+				}
+				else if (cross_product < 0) {
+					type = ENTERING; // 叉积<0为进入
+				}
+				else {
+					// 共线或掠过顶点的情况
+					// 检查边的两个端点是否在矩形的不同侧，以确定是否为有效穿越
+					bool p1_inside = is_inside_rect(p1, rect);
+					bool p2_inside = is_inside_rect(p2, rect);
+					if (p1_inside && !p2_inside) {
+						type = LEAVING;
+					}
+					else if (!p1_inside && p2_inside) {
+						type = ENTERING;
+					}
+					// 如果 p1 和 p2 都在同一侧（都在内部或都在外部），
+					// 这意味着边与裁剪边界重合或仅在顶点处接触，
+					// 我们可以将其视为非穿越事件(type = NONE)，从而简化处理。
+				}
 
 				double dist_subj = hypot((double)intersection.x - p1.x, (double)intersection.y - p1.y);
 				double dist_clip = hypot((double)intersection.x - c1.x, (double)intersection.y - c1.y);
@@ -2448,14 +2491,14 @@ std::vector<PolygonShap*> PolygonShap::ClipWA(const CRect& rect) const {
 	for (const auto& list : subjectLists) for (const auto& v : list) finalSubjectList.push_back(v);
 	for (const auto& list : clipLists) for (const auto& v : list) finalClipList.push_back(v);
 
-	//任师傅最后选择了，直接将交点以交替的形式标记为进入或离开
-	bool isEntering = true;
-	for (auto& vertex : finalSubjectList) {
-		if (vertex.isIntersection) {
-			vertex.type = isEntering ? ENTERING : LEAVING;
-			isEntering = !isEntering;
-		}
-	}
+	////任师傅最后选择了，直接将交点以交替的形式标记为进入或离开
+	//bool isEntering = true;
+	//for (auto& vertex : finalSubjectList) {
+	//	if (vertex.isIntersection) {
+	//		vertex.type = isEntering ? ENTERING : LEAVING;
+	//		isEntering = !isEntering;
+	//	}
+	//}
 
 	// 6. 建立交点之间的双向链接
 	for (size_t i = 0; i < finalSubjectList.size(); ++i) {
