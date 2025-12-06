@@ -2448,7 +2448,7 @@ std::vector<PolygonShap*> PolygonShap::ClipWA(const CRect& rect) const {
 			if (get_line_intersection(p1, p2, c1, c2, intersection)) {
 				// 使用向量叉积判断进入/离开，更鲁棒
 				// 叉积 = (p2-p1) x (c2-c1)
-				long long cross_product = (long long)(p1.x - p2.x) * (c1.y - c2.y) - (long long)(p1.y - p2.y) * (c1.x - c2.x);
+				long long cross_product = (long long)(p2.x - p1.x) * (c2.y - c1.y) - (long long)(p2.y - p1.y) * (c2.x - c1.x);
 
 				IntersectionType type = NONE;
 				if (cross_product > 0) {

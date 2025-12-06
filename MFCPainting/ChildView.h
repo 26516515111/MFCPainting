@@ -239,7 +239,7 @@ public:
 	afx_msg void OnSeedFillMode();
 	afx_msg void OnBarrierFillMode();
 	afx_msg void OnCLineCut();
-	afx_msg void OnMLineCut();
+//	afx_msg void OnMLineCut();
 	afx_msg void OnSRectCut();
 	afx_msg void OnWRectCut();
 private:

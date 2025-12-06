@@ -87,7 +87,7 @@ ON_COMMAND(ID_32805, &CChildView::OnBarrierFillMode)
 
 
 ON_COMMAND(ID_32808, &CChildView::OnCLineCut)
-ON_COMMAND(ID_32809, &CChildView::OnMLineCut)
+//ON_COMMAND(ID_32809, &CChildView::OnMLineCut)
 ON_COMMAND(ID_32810, &CChildView::OnSRectCut)
 ON_COMMAND(ID_32811, &CChildView::OnWRectCut)
 ON_COMMAND(ID_32812, &CChildView::OnPolyGon)
@@ -482,15 +482,15 @@ void CChildView::OnCLineCut()
 
 }
 
-void CChildView::OnMLineCut()
-{
+//void CChildView::OnMLineCut()
+//{
 	// TODO: 在此添加命令处理程序代码
 	// 直线裁剪：中点法
-	ResetAllModes();
-	IsClipMode = true;
-	m_clipAlgo = 1;
-
-}
+//	ResetAllModes();
+//	IsClipMode = true;
+//	m_clipAlgo = 1;
+//
+//}
 
 void CChildView::OnSRectCut()
 {
@@ -1414,10 +1414,7 @@ void CChildView::ScanlineFill(CImage& img, CPoint seed, COLORREF fillColor, COLO
 #pragma endregion
 
 
-
-
-
-
+#pragma region ClipLineAlgorithms
 static inline int CS_OutCode(int x, int y, const CRect& r) {
 	int code = 0;
 	if (x < r.left)  code |= 1; // LEFT
@@ -1427,52 +1424,64 @@ static inline int CS_OutCode(int x, int y, const CRect& r) {
 	return code;
 }
 
-// Cohen-Sutherland 裁剪：输入/输出为整型端点；返回 true 表示有被裁后的线段（修改 x0,y0,x1,y1）
-static bool CohenSutherlandClipLine(int& x0, int& y0, int& x1, int& y1, const CRect& rc) {
-	int out0 = CS_OutCode(x0, y0, rc);
-	int out1 = CS_OutCode(x1, y1, rc);
-	bool accept = false;
-	while (true) {
-		if ((out0 | out1) == 0) { // 都在内部
-			accept = true; break;
-		}
-		if ((out0 & out1) != 0) { // 都在同一外部区域 -> 拒绝
-			break;
-		}
-		// 选择外部点
-		int outcodeOut = out0 ? out0 : out1;
-		double x = 0.0, y = 0.0;
-		double dx = x1 - x0;
-		double dy = y1 - y0;
-		if (outcodeOut & 4) { // TOP
-			x = x0 + dx * (rc.top - y0) / (double)dy;
-			y = rc.top;
-		}
-		else if (outcodeOut & 8) { // BOTTOM
-			x = x0 + dx * (rc.bottom - y0) / (double)dy;
-			y = rc.bottom;
-		}
-		else if (outcodeOut & 1) { // LEFT
-			y = y0 + dy * (rc.left - x0) / (double)dx;
-			x = rc.left;
-		}
-		else if (outcodeOut & 2) { // RIGHT
-			y = y0 + dy * (rc.right - x0) / (double)dx;
-			x = rc.right;
-		}
-		// 替换外部点
-		if (outcodeOut == out0) {
-			x0 = static_cast<int>(std::lround(x));
-			y0 = static_cast<int>(std::lround(y));
-			out0 = CS_OutCode(x0, y0, rc);
+//  Liang-Barsky 裁剪：输入/输出为整型端点；返回 true 表示有被裁后的线段（修改 x0,y0,x1,y1）
+static bool LiangBarskyClipLine(int& x0, int& y0, int& x1, int& y1, const CRect& rc) {
+
+	double dx = static_cast<double>(x1 - x0);
+	double dy = static_cast<double>(y1 - y0);
+
+	double p[4] = { -dx, dx, -dy, dy };
+	double q[4] = {
+		static_cast<double>(x0 - rc.left),
+		static_cast<double>(rc.right - x0),
+		static_cast<double>(y0 - rc.top),
+		static_cast<double>(rc.bottom - y0)
+	};
+
+	double t_enter = 0.0;
+	double t_leave = 1.0;
+
+	for (int i = 0; i < 4; ++i) {
+		if (std::abs(p[i]) < 1e-9) { // 线段与边界平行
+			if (q[i] < 0) {
+				return false; // 完全在边界外
+			}
 		}
 		else {
-			x1 = static_cast<int>(std::lround(x));
-			y1 = static_cast<int>(std::lround(y));
-			out1 = CS_OutCode(x1, y1, rc);
+			double r = q[i] / p[i];
+			if (p[i] < 0) { // 进入
+				t_enter = std::max(t_enter, r);
+			}
+			else { // 离开
+				t_leave = std::min(t_leave, r);
+			}
+		}
+
+		if (t_enter > t_leave) {
+			return false; // 线段完全在裁剪窗口外
 		}
 	}
-	return accept;
+
+	// 如果 t_leave < 1.0，更新终点
+	int new_x1 = x1, new_y1 = y1;
+	if (t_leave < 1.0) {
+		new_x1 = static_cast<int>(std::lround(x0 + t_leave * dx));
+		new_y1 = static_cast<int>(std::lround(y0 + t_leave * dy));
+	}
+
+	// 如果 t_enter > 0.0，更新起点
+	int new_x0 = x0, new_y0 = y0;
+	if (t_enter > 0.0) {
+		new_x0 = static_cast<int>(std::lround(x0 + t_enter * dx));
+		new_y0 = static_cast<int>(std::lround(y0 + t_enter * dy));
+	}
+
+	x0 = new_x0;
+	y0 = new_y0;
+	x1 = new_x1;
+	y1 = new_y1;
+
+	return true;
 }
 
 // 线段-线段相交（闭区间），返回是否相交（double 版本）
@@ -1505,7 +1514,7 @@ static bool SegmentIntersectsRect(double x0, double y0, double x1, double y1, co
 	return false;
 }
 
-// 中点分割：递归分割，收集落在矩形内的子段（阈值: 最大深度或段长度小于 1 像素）
+
 static void MidpointSubdivisionCollect(double x0, double y0, double x1, double y1, const CRect& rc,
 	std::vector<std::pair<CPoint, CPoint>>& out, int depth = 0)
 {
@@ -1553,7 +1562,7 @@ void CChildView::ClipLinesWithRect(const CRect& rect)
 
 		if (m_clipAlgo == 0) {
 			int x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
-			bool ok = CohenSutherlandClipLine(x0, y0, x1, y1, rect);
+			bool ok = LiangBarskyClipLine(x0, y0, x1, y1, rect);
 			// 删除原线段
 			Shaps.erase(Shaps.begin() + i);
 			ln->Destroy();
@@ -1581,7 +1590,6 @@ void CChildView::ClipLinesWithRect(const CRect& rect)
 		}
 	}
 }
-
 
 void CChildView::ClipPolygonsWithRect(const CRect& rect)
 {
@@ -1635,3 +1643,5 @@ void CChildView::ClipPolygonsWithRectWA(const CRect& rect)
 	}
 	Invalidate(); // 重绘以显示结果
 }
+
+#pragma endregion
