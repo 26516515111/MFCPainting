@@ -1025,6 +1025,42 @@ bool PolygonShap::check(const std::vector<CPoint>& points) {
 	return true;
 }
 
+//// 辅助函数：检查线段 'p1q1' 和 'p2q2' 是否相交
+//static bool doIntersect_1(CPoint p1, CPoint q1, CPoint p2, CPoint q2) {
+//	// 找到四个方向
+//	int o1 = orientation(p1, q1, p2);
+//	int o2 = orientation(p1, q1, q2);
+//	int o3 = orientation(p2, q2, p1);
+//	int o4 = orientation(p2, q2, q1);
+//
+//	// 一般情况：两条线段相互跨越
+//	if (o1 != o2 && o3 != o4)
+//		return true;
+//
+//	// 特殊情况：p1, q1, p2 共线且 p2 在线段 p1q1 上
+//	if (o1 == 0 && onSegment(p1, p2, q1)) return true;
+//
+//	// 特殊情况：p1, q1, q2 共线且 q2 在线段 p1q1 上
+//	if (o2 == 0 && onSegment(p1, q2, q1)) return true;
+//
+//	// 特殊情况：p2, q2, p1 共线且 p1 在线段 p2q2 上
+//	if (o3 == 0 && onSegment(p2, p1, q2)) return true;
+//
+//	// 特殊情况：p2, q2, q1 共线且 q1 在线段 p2q2 上
+//	if (o4 == 0 && onSegment(p2, q1, q2)) return true;
+//
+//	return false; // 不相交
+//}
+
+int PolygonShap::GetPointOrientation(const std::vector<CPoint>& polygonPoints, CPoint point)
+{
+	if (polygonPoints.size() < 2) {
+		return 0; // 无法构成边
+	}
+	// 使用已有的 orientation 辅助函数
+	return orientation(polygonPoints[0], polygonPoints[1], point);
+}
+
 
 
 TriangleShap::TriangleShap(CPoint a, CPoint b, CPoint c)
@@ -2417,24 +2453,33 @@ std::vector<PolygonShap*> PolygonShap::ClipWA(const CRect& rect) const {
 	std::vector<PolygonShap*> resultPolygons;
 	std::vector<std::vector<VertexInfo>> subjectLists, clipLists;
 
+	
 	// 1. 构建裁剪窗口（矩形）的顶点列表
 	std::vector<CPoint> clipVertices = {
-		{rect.left, rect.top}, {rect.right, rect.top},
-		{rect.right, rect.bottom}, {rect.left, rect.bottom}
+			{rect.left, rect.top}, {rect.right, rect.top},
+			{rect.right, rect.bottom}, {rect.left, rect.bottom}
 	};
+	
+	// 创建一个 ptsInt 的本地副本，用于后续操作
+	std::vector<CPoint> ptsInt2 = ptsInt;
 
 	// 2. 初始化 subjectLists 和 clipLists
-	for (size_t i = 0; i < ptsInt.size(); ++i) {
-		subjectLists.push_back({ {ptsInt[i]} });
+	if (GetPointOrientation(ptsInt, ptsInt[2]) == 1) {
+		std::reverse(ptsInt2.begin(), ptsInt2.end());
 	}
+
+	for (size_t i = 0; i < ptsInt2.size(); ++i) {
+		subjectLists.push_back({ {ptsInt2[i]} });
+	}	
+	
 	for (size_t i = 0; i < clipVertices.size(); ++i) {
 		clipLists.push_back({ {clipVertices[i]} });
 	}
 
 	// 3. 计算交点并构建完整的顶点列表
-	for (size_t i = 0; i < ptsInt.size(); ++i) {
-		CPoint p1 = ptsInt[i];//多变形边的起点
-		CPoint p2 = ptsInt[(i + 1) % ptsInt.size()];//多变形边的终点
+	for (size_t i = 0; i < ptsInt2.size(); ++i) {
+		CPoint p1 = ptsInt2[i];//多变形边的起点
+		CPoint p2 = ptsInt2[(i + 1) % ptsInt2.size()];//多变形边的终点
 
 		for (size_t j = 0; j < clipVertices.size(); ++j) {
 			CPoint c1 = clipVertices[j];//裁剪边的起点
@@ -2491,15 +2536,6 @@ std::vector<PolygonShap*> PolygonShap::ClipWA(const CRect& rect) const {
 	for (const auto& list : subjectLists) for (const auto& v : list) finalSubjectList.push_back(v);
 	for (const auto& list : clipLists) for (const auto& v : list) finalClipList.push_back(v);
 
-	////任师傅最后选择了，直接将交点以交替的形式标记为进入或离开
-	//bool isEntering = true;
-	//for (auto& vertex : finalSubjectList) {
-	//	if (vertex.isIntersection) {
-	//		vertex.type = isEntering ? ENTERING : LEAVING;
-	//		isEntering = !isEntering;
-	//	}
-	//}
-
 	// 6. 建立交点之间的双向链接
 	for (size_t i = 0; i < finalSubjectList.size(); ++i) {
 		if (finalSubjectList[i].isIntersection) {
@@ -2548,16 +2584,16 @@ std::vector<PolygonShap*> PolygonShap::ClipWA(const CRect& rect) const {
 	}
 
 	// 8. 处理完全在内部的情况
-	if (resultPolygons.empty() && !ptsInt.empty()) {
+	if (resultPolygons.empty() && !ptsInt2.empty()) {
 		bool all_inside = true;
-		for (const auto& pt : ptsInt) {
+		for (const auto& pt : ptsInt2) {
 			if (!is_inside_rect(pt, rect)) {
 				all_inside = false;
 				break;
 			}
 		}
 		if (all_inside) {
-			resultPolygons.push_back(new PolygonShap(ptsInt));
+			resultPolygons.push_back(new PolygonShap(ptsInt2));
 		}
 	}
 

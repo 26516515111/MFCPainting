@@ -357,6 +357,8 @@ public:
 	static bool check(const std::vector<CPoint>& points);
 
 
+	static int GetPointOrientation(const std::vector<CPoint>& polygonPoints, CPoint point);
+
 	// ±ä»»
 	void Move(CSize delta) override;
 	void Rotate(double degrees) override;
